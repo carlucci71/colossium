@@ -1,0 +1,3 @@
+[submodule "src/main/java/secrets"]
+	path = src/main/java/secrets
+	url = https://github.com/carlucci71/secrets

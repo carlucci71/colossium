@@ -30,9 +30,9 @@ import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import it.daniele.colossium.constant.Constant;
 import it.daniele.colossium.domain.News;
 import it.daniele.colossium.domain.TelegramMsg;
+import secrets.ConstantColossium;
 
 
 @Configuration
@@ -74,7 +74,7 @@ public class JobConfig extends TelegramLongPollingBot {
 //		init();
 		String response = restTemplate.getForObject("https://www.teatrocolosseo.it/News/Default.aspx", String.class);
 		Document doc = Jsoup.parse(response);
-		for (int i=0;i<Constant.MAX_NEWS;i++) {
+		for (int i=0;i<ConstantColossium.MAX_NEWS;i++) {
 			String textDes = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblDescrizione1]").text();
 			String textData = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblData]").text();
 			String textTitolo = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblTitolo]").text();
@@ -94,7 +94,7 @@ public class JobConfig extends TelegramLongPollingBot {
 		resultList.forEach(el-> {
 			if (LocalDateTime.now().isAfter(el.getDataConsegna().plusDays(10))) {
 				el.setDataEliminazione(LocalDateTime.now());
-				DeleteMessage deleteMessage = new DeleteMessage(Constant.MY_CHAT_ID, el.getId());
+				DeleteMessage deleteMessage = new DeleteMessage(ConstantColossium.MY_CHAT_ID, el.getId());
 				try {
 					entityManager.persist(el);
 					execute(deleteMessage);
@@ -139,7 +139,7 @@ public class JobConfig extends TelegramLongPollingBot {
 				entityManager.persist(el);
 				inviaMessaggio(el.toString());
 				messaggiInviati++;
-				if (messaggiInviati==Constant.MAX_NEWS) {
+				if (messaggiInviati==ConstantColossium.MAX_NEWS) {
 					inviaMessaggio("Leggi le NEWS!!!!!!!");
 				}
 			}
@@ -157,7 +157,7 @@ public class JobConfig extends TelegramLongPollingBot {
 	@Bean
 	public Step createStep() {
 		return stepBuilderFactory.get("MyStep")
-				.<News, News> chunk(Constant.CHUNK)
+				.<News, News> chunk(ConstantColossium.CHUNK)
 				.reader(itemReader)
 				.processor(itemProcessor)
 				.writer(itemWriter)
@@ -166,12 +166,12 @@ public class JobConfig extends TelegramLongPollingBot {
 
 	@Override
 	public String getBotUsername() {
-		return Constant.BOT_USERNAME;
+		return ConstantColossium.BOT_USERNAME;
 	}
 
 	@Override
 	public String getBotToken() {
-		return Constant.BOT_TOKEN;
+		return ConstantColossium.BOT_TOKEN;
 	}
 
 
@@ -179,7 +179,7 @@ public class JobConfig extends TelegramLongPollingBot {
 		SendMessage sendMessage = new SendMessage();
 		sendMessage.enableHtml(true);
 		sendMessage.setParseMode("html");
-		sendMessage.setChatId(Constant.MY_CHAT_ID);
+		sendMessage.setChatId(ConstantColossium.MY_CHAT_ID);
 		sendMessage.setText(msg);
 		try {
 			Message message = execute(sendMessage);
