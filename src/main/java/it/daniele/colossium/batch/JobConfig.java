@@ -10,6 +10,8 @@ import javax.persistence.PersistenceContext;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import org.springframework.batch.core.Job;
 import org.springframework.batch.core.Step;
 import org.springframework.batch.core.configuration.annotation.EnableBatchProcessing;
@@ -20,6 +22,7 @@ import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestTemplate;
@@ -31,6 +34,7 @@ import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import it.daniele.colossium.domain.News;
+import it.daniele.colossium.domain.Show;
 import it.daniele.colossium.domain.TelegramMsg;
 import secrets.ConstantColossium;
 
@@ -49,29 +53,48 @@ public class JobConfig extends TelegramLongPollingBot {
 	RestTemplate restTemplate;
 
 	@Autowired
-	ItemReader<News> itemReader;
+	@Qualifier("readerNews")
+	ItemReader<News> itemReaderNews;
 
 	@Autowired
-	ItemProcessor<News,News> itemProcessor;
+	@Qualifier("readerShow")
+	ItemReader<Show> itemReaderShow;
+	
+	@Autowired
+	@Qualifier("processorShow")
+	ItemProcessor<Show,Show> itemProcessorShow;
 
 	@Autowired
-	ItemWriter<News> itemWriter;
+	@Qualifier("processorNews")
+	ItemProcessor<News,News> itemProcessorNews;
+	
+	@Autowired
+	@Qualifier("writerNews")
+	ItemWriter<News> itemWriterNews;
 
+	@Autowired
+	@Qualifier("writerShow")
+	ItemWriter<Show> itemWriterShow;
+	
 	@PersistenceContext
 	EntityManager entityManager;
 
-	
-	
-	
+
+
+
 	@Autowired
 	JobBuilderFactory jobBuilderFactory;
 
 	@Autowired
-	Step stepBean;
+	@Qualifier("stepNews")
+	Step stepBeanNews;
 
+	@Autowired
+	@Qualifier("stepShow")
+	Step stepBeanShow;
+	
 	@PostConstruct
 	private void postConstructor() {
-//		init();
 		String response = restTemplate.getForObject("https://www.teatrocolosseo.it/News/Default.aspx", String.class);
 		Document doc = Jsoup.parse(response);
 		for (int i=0;i<ConstantColossium.MAX_NEWS;i++) {
@@ -81,6 +104,24 @@ public class JobConfig extends TelegramLongPollingBot {
 			News news = new News(textData, textTitolo, textDes);
 			listNews.add(news);
 		}
+		response = restTemplate.getForObject("https://www.teatrocolosseo.it/Stagione.aspx", String.class);
+		doc = Jsoup.parse(response);
+		Elements select = doc.select(".boxspet");
+		for (int i=0;i<select.size();i++) {
+			Element element = select.get(i);
+			try {
+				String id = element.select(".spett-box-image").first().attr("id").replace("_imageBox", "");
+				String data = doc.select("span[id*=" + id + "_lblDataIntro]").text();
+				String titolo = doc.select("#"+ id +"_divOverlay1 strong").first().text();
+				String img = element.select(".spett-box-image").first().attr("data-source");
+				String href="https://www.teatrocolosseo.it/" + doc.select("a[id*=" + id + "_hlCompra]").first().attr("href");
+				Show show = new Show(data, titolo, img, href);
+				listShow.add(show);
+			}
+			catch (Exception e) {
+			}
+		}
+		System.out.println();
 	}
 
 	@Bean
@@ -105,21 +146,31 @@ public class JobConfig extends TelegramLongPollingBot {
 		});
 	}
 
-	@Bean
-	public ItemReader<News> itemReader() {
+	@Bean(name = "readerNews")
+	public ItemReader<News> itemReaderNews() {
 		return () -> {
-			if (posizione==0) {
+			if (posizioneNews==0) {
 				init();
 			}
-			if (posizione>=listNews.size()) return null;
-			News  customerCreditAtt = listNews.get(posizione);
-			posizione++;
-			return customerCreditAtt;
+			if (posizioneNews>=listNews.size()) return null;
+			News  newsAtt = listNews.get(posizioneNews);
+			posizioneNews++;
+			return newsAtt;
 		};
 	}
 
-	@Bean
-	public ItemProcessor<News, News> itemProcessor() {
+	@Bean(name = "readerShow")
+	public ItemReader<Show> itemReaderShow() {
+		return () -> {
+			if (posizioneShow>=listShow.size()) return null;
+			Show  showAtt = listShow.get(posizioneShow);
+			posizioneShow++;
+			return showAtt;
+		};
+	}
+	
+	@Bean(name = "processorNews")
+	public ItemProcessor<News, News> itemProcessorNews() {
 		return item -> {
 			List<News> resultList = entityManager.createQuery("select n from News n where des = :des and titolo = :titolo", News.class)
 					.setParameter("des", item.getDes())
@@ -132,9 +183,22 @@ public class JobConfig extends TelegramLongPollingBot {
 		};
 	}
 
-	@Bean
-	public ItemWriter<News> itemWriter() {
-		return customers -> customers.forEach(el -> {
+	@Bean(name = "processorShow")
+	public ItemProcessor<Show, Show> itemProcessorShow() {
+		return item -> {
+			List<Show> resultList = entityManager.createQuery("select n from Show n where titolo = :titolo", Show.class)
+					.setParameter("titolo", item.getTitolo())
+					.getResultList();
+			if (resultList.size()==0) {
+				item.setDataConsegna(LocalDateTime.now());
+			}
+			return item;
+		};
+	}
+	
+	@Bean(name = "writerNews")
+	public ItemWriter<News> itemWriterNews() {
+		return news -> news.forEach(el -> {
 			if (el.getDataConsegna()!=null) {
 				entityManager.persist(el);
 				inviaMessaggio(el.toString());
@@ -146,21 +210,43 @@ public class JobConfig extends TelegramLongPollingBot {
 		});
 	}
 
+	@Bean(name = "writerShow")
+	public ItemWriter<Show> itemWriterShow() {
+		return shows -> shows.forEach(el -> {
+			if (el.getDataConsegna()!=null) {
+				entityManager.persist(el);
+				inviaMessaggio(el.toString());
+			}
+		});
+	}
+	
 	@Bean
 	public Job createJob() {
 		return jobBuilderFactory.get("MyJob")
 				.incrementer(new RunIdIncrementer())
-				.flow(stepBean).end().build();
+				.start(stepBeanNews)
+				.next(stepBeanShow)
+				.build();
 	}
 
 
-	@Bean
-	public Step createStep() {
-		return stepBuilderFactory.get("MyStep")
+	@Bean(name = "stepNews")
+	public Step createStepNews() {
+		return stepBuilderFactory.get("StepNews")
 				.<News, News> chunk(ConstantColossium.CHUNK)
-				.reader(itemReader)
-				.processor(itemProcessor)
-				.writer(itemWriter)
+				.reader(itemReaderNews)
+				.processor(itemProcessorNews)
+				.writer(itemWriterNews)
+				.build();
+	}	
+
+	@Bean(name = "stepShow")
+	public Step createStepShow() {
+		return stepBuilderFactory.get("StepShow")
+				.<Show, Show> chunk(ConstantColossium.CHUNK)
+				.reader(itemReaderShow)
+				.processor(itemProcessorShow)
+				.writer(itemWriterShow)
 				.build();
 	}	
 
@@ -195,6 +281,9 @@ public class JobConfig extends TelegramLongPollingBot {
 
 	int messaggiInviati=0;
 	private List<News> listNews=new ArrayList<>(); 
-	int posizione=0;
+	private List<Show> listShow=new ArrayList<>(); 
+	int posizioneNews=0;
+	int posizioneShow=0;
+	
 
 }
