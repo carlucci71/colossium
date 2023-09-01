@@ -28,7 +28,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.client.RestTemplate;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
+import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -113,7 +115,7 @@ public class JobConfig extends TelegramLongPollingBot {
 				String id = element.select(".spett-box-image").first().attr("id").replace("_imageBox", "");
 				String data = doc.select("span[id*=" + id + "_lblDataIntro]").text();
 				String titolo = doc.select("#"+ id +"_divOverlay1 strong").first().text();
-				String img = element.select(".spett-box-image").first().attr("data-source");
+				String img = "https://www.teatrocolosseo.it/" + element.select(".spett-box-image").first().attr("data-source");
 				String href="https://www.teatrocolosseo.it/" + doc.select("a[id*=" + id + "_hlCompra]").first().attr("href");
 				Show show = new Show(data, titolo, img, href);
 				listShow.add(show);
@@ -131,6 +133,7 @@ public class JobConfig extends TelegramLongPollingBot {
 
 	private void init() {
 		inviaMessaggio("Cerco le news...");
+
 		List<TelegramMsg> resultList = entityManager.createQuery("select t from TelegramMsg t where dataEliminazione is null", TelegramMsg.class).getResultList();
 		resultList.forEach(el-> {
 			if (LocalDateTime.now().isAfter(el.getDataConsegna().plusDays(10))) {
@@ -215,7 +218,7 @@ public class JobConfig extends TelegramLongPollingBot {
 		return shows -> shows.forEach(el -> {
 			if (el.getDataConsegna()!=null) {
 				entityManager.persist(el);
-				inviaMessaggio(el.toString());
+				sendImageToChat(el.getImg(),el.toString());
 			}
 		});
 	}
@@ -261,6 +264,22 @@ public class JobConfig extends TelegramLongPollingBot {
 	}
 
 
+	public void sendImageToChat(String imageUrl, String caption) {
+	    SendPhoto sendPhoto = new SendPhoto();
+	    sendPhoto.setChatId(ConstantColossium.MY_CHAT_ID);
+	    sendPhoto.setPhoto(new InputFile(imageUrl));
+	    sendPhoto.setCaption(caption);
+	    try {
+	    	System.out.println(imageUrl);
+	        Message message = execute(sendPhoto);
+			TelegramMsg tm = new TelegramMsg(message.getMessageId(), LocalDateTime.now());
+			entityManager.persist(tm);
+	    } catch (TelegramApiException e) {
+			//throw new RuntimeException(e);
+	    	inviaMessaggio("**** NO IMG *** " + caption);
+	    }
+	}
+	
 	private void inviaMessaggio(String msg)  {
 		SendMessage sendMessage = new SendMessage();
 		sendMessage.enableHtml(true);
