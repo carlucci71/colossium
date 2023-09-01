@@ -123,7 +123,6 @@ public class JobConfig extends TelegramLongPollingBot {
 			catch (Exception e) {
 			}
 		}
-		System.out.println();
 	}
 
 	@Bean
@@ -270,13 +269,12 @@ public class JobConfig extends TelegramLongPollingBot {
 	    sendPhoto.setPhoto(new InputFile(imageUrl));
 	    sendPhoto.setCaption(caption);
 	    try {
-	    	System.out.println(imageUrl);
 	        Message message = execute(sendPhoto);
 			TelegramMsg tm = new TelegramMsg(message.getMessageId(), LocalDateTime.now());
 			entityManager.persist(tm);
 	    } catch (TelegramApiException e) {
 			//throw new RuntimeException(e);
-	    	inviaMessaggio("**** NO IMG *** " + caption);
+	    	inviaMessaggio("**** NO IMG *** <br>" + caption);
 	    }
 	}
 	
