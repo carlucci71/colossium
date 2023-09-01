@@ -274,7 +274,7 @@ public class JobConfig extends TelegramLongPollingBot {
 			entityManager.persist(tm);
 	    } catch (TelegramApiException e) {
 			//throw new RuntimeException(e);
-	    	inviaMessaggio("**** NO IMG *** <br>" + caption);
+	    	inviaMessaggio("**** NO IMG *** \n\r" + caption);
 	    }
 	}
 	
