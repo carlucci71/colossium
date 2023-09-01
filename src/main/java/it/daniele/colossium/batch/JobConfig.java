@@ -21,6 +21,7 @@ import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
+import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
@@ -95,6 +96,15 @@ public class JobConfig extends TelegramLongPollingBot {
 	@Qualifier("stepShow")
 	Step stepBeanShow;
 	
+	@Autowired
+	@Qualifier("fallbackStep")
+	Step fallbackStep;
+	
+	@Autowired
+	@Qualifier("initStep")
+	Step initStep;
+	
+	
 	@PostConstruct
 	private void postConstructor() {
 		String response = restTemplate.getForObject("https://www.teatrocolosseo.it/News/Default.aspx", String.class);
@@ -151,9 +161,6 @@ public class JobConfig extends TelegramLongPollingBot {
 	@Bean(name = "readerNews")
 	public ItemReader<News> itemReaderNews() {
 		return () -> {
-			if (posizioneNews==0) {
-				init();
-			}
 			if (posizioneNews>=listNews.size()) return null;
 			News  newsAtt = listNews.get(posizioneNews);
 			posizioneNews++;
@@ -226,9 +233,17 @@ public class JobConfig extends TelegramLongPollingBot {
 	public Job createJob() {
 		return jobBuilderFactory.get("MyJob")
 				.incrementer(new RunIdIncrementer())
-				.start(stepBeanNews)
-				.next(stepBeanShow)
-				.build();
+				.start(initStep)
+				.next(stepBeanNews)
+				.on("FAILED")
+			    .to(fallbackStep)
+			    .from(stepBeanNews)
+		        .on("*")
+		        .to(stepBeanShow)			    
+				.on("FAILED")
+			    .to(fallbackStep)
+		        .end()
+			    .build();
 	}
 
 
@@ -252,6 +267,26 @@ public class JobConfig extends TelegramLongPollingBot {
 				.build();
 	}	
 
+	@Bean(name="fallbackStep")
+	public Step fallbackStep() {
+	    return stepBuilderFactory.get("fallbackStep")
+	        .tasklet((contribution, chunkContext) -> {
+	        	inviaMessaggio("ERRORE");
+	            return RepeatStatus.FINISHED;
+	        })
+	        .build();
+	}
+
+	@Bean(name="initStep")
+	public Step initStep() {
+	    return stepBuilderFactory.get("initStep")
+	        .tasklet((contribution, chunkContext) -> {
+	        	init();
+	            return RepeatStatus.FINISHED;
+	        })
+	        .build();
+	}
+	
 	@Override
 	public String getBotUsername() {
 		return ConstantColossium.BOT_USERNAME;
