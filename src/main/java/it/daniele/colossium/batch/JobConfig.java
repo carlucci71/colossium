@@ -77,7 +77,7 @@ public class JobConfig extends TelegramLongPollingBot {
 		return jobBuilderFactory.get("MyJob")
 				.incrementer(new RunIdIncrementer())
 				.listener(jobResultListener())
-				.start(initStep())
+				.start(stepInit())
 				.next(stepNews())
 				.next(stepShow())
 				.build();
@@ -111,7 +111,7 @@ public class JobConfig extends TelegramLongPollingBot {
         	@Override
         	public ExitStatus afterStep(StepExecution stepExecution) {
         		logger.info("Called afterStep: {}", stepExecution);
-        		if (!stepExecution.getStepName().equals("initStep")) {
+        		if (!stepExecution.getStepName().equals("stepInit")) {
             		esito=esito+stepExecution.getStepName() + ":" + stepExecution.getWriteCount() + "\n\r";
         		}
         		return null;
@@ -119,8 +119,8 @@ public class JobConfig extends TelegramLongPollingBot {
         };
     }	
 
-	private Step initStep() {
-		return stepBuilderFactory.get("initStep")
+	private Step stepInit() {
+		return stepBuilderFactory.get("stepInit")
 				.tasklet((contribution, chunkContext) -> {
 					String response = restTemplate.getForObject("https://www.teatrocolosseo.it/News/Default.aspx", String.class);
 					Document doc = Jsoup.parse(response);
@@ -141,7 +141,7 @@ public class JobConfig extends TelegramLongPollingBot {
 							String data = doc.select("span[id*=" + id + "_lblDataIntro]").text();
 							String titolo = doc.select("#"+ id +"_divOverlay1 strong").first().text();
 							String img = "https://www.teatrocolosseo.it/" + element.select(".spett-box-image").first().attr("data-source");
-							String href="https://www.teatrocolosseo.it/" + doc.select("a[id*=" + id + "_hlCompra]").first().attr("href");
+							String href="https://www.teatrocolosseo.it/" + doc.select("a[id*=" + id + "_hlVisualizza]").first().attr("href");
 							Show show = new Show(data, titolo, img, href);
 							listShow.add(show);
 						}
@@ -295,7 +295,14 @@ public class JobConfig extends TelegramLongPollingBot {
 			Message message = execute(sendPhoto);
 			salvaMessaggio(message);
 		} catch (TelegramApiException e) {
-			inviaMessaggio("**** NO IMG *** \n\r" + caption);
+			try {
+				sendPhoto.setPhoto(new InputFile("https://www.teatrocolosseo.it/images/throbber.gif"));
+				Message message = execute(sendPhoto);
+				salvaMessaggio(message);
+			}
+			catch (TelegramApiException e2) {
+				inviaMessaggio("**** NO IMG *** \n\r" + caption);
+			}
 		}
 	}
 	
