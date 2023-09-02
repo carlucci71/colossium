@@ -57,7 +57,7 @@ public class News {
 	}
 	@Override
 	public String toString() {
-		return "News [data=" + data + ", titolo=" + titolo + ", des=" + des + "]";
+		return titolo + "\n\r\n\r" + des;
 	}
 	
 }

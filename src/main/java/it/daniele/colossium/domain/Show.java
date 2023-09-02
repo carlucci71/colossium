@@ -59,7 +59,7 @@ public class Show {
 	}
 	@Override
 	public String toString() {
-		return "Show [img=" + img + ", data=" + data + ", titolo=" + titolo + ", href=" + href + "]";
+		return data + "\n\r" + titolo + "\n\r" + href;
 	}
 	public LocalDateTime getDataConsegna() {
 		return dataConsegna;
