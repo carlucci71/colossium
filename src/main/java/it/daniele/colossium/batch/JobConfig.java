@@ -3,6 +3,7 @@ package it.daniele.colossium.batch;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
@@ -33,7 +34,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -43,6 +43,10 @@ import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import it.daniele.colossium.domain.News;
 import it.daniele.colossium.domain.Show;
@@ -142,13 +146,16 @@ public class JobConfig extends TelegramLongPollingBot {
 							String titolo = doc.select("#"+ id +"_divOverlay1 strong").first().text();
 							String img = "https://www.teatrocolosseo.it/" + element.select(".spett-box-image").first().attr("data-source");
 							String href="https://www.teatrocolosseo.it/" + doc.select("a[id*=" + id + "_hlVisualizza]").first().attr("href");
-							Show show = new Show(data, titolo, img, href);
+							Show show = new Show(data, titolo, img, href, "", "COLOSSEO");
 							listShow.add(show);
 						}
 						catch (Exception e) {
 						}
 					}
 
+					leggiTicketOne();
+					
+					
 					List<TelegramMsg> resultList = entityManager.createQuery("select t from TelegramMsg t where dataEliminazione is null", TelegramMsg.class).getResultList();
 					resultList.forEach(el-> {
 						if (LocalDateTime.now().isAfter(el.getDataConsegna().plusDays(ConstantColossium.DAY_TTL))) {
@@ -166,6 +173,55 @@ public class JobConfig extends TelegramLongPollingBot {
 				})
 				.listener(stepResultListener())
 				.build();
+	}
+
+	private ObjectMapper mapper = new ObjectMapper();
+	public String toJson(Object o)
+	{
+		try
+		{
+			byte[] data = mapper.writeValueAsBytes(o);
+			return new String(data);
+		} catch (JsonProcessingException e)
+		{
+			throw new RuntimeException(e);
+		} 
+	}
+	
+	public Map<String, Object> jsonToMap(String json)
+	{
+		try
+		{
+			return mapper.readValue(json, new TypeReference<Map<String, Object>>(){});
+		} catch (Exception e)
+		{
+			throw new RuntimeException(e);
+		}
+	}
+	
+	
+	private void leggiTicketOne() {
+		int page=1;
+		int tp;
+		do {
+			String response = restTemplate.getForObject("https://public-api.eventim.com/websearch/search/api/exploration/v2/productGroups?webId=web__ticketone-it&language=it&page="
+					+ page + "&city_ids=217&city_ids=null", String.class);
+			Map<String, Object> jsonToMap = jsonToMap(response);
+			tp = (int) jsonToMap.get("totalPages");
+			List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("productGroups");
+			for (Map<String, Object> map : l) {
+				Show show = new Show(map.get("startDate").toString(), 
+						map.get("name").toString(), 
+						(map.get("imageUrl") != null?map.get("imageUrl").toString():""), 
+						map.get("link").toString(),
+						(map.get("description") != null?map.get("description").toString():""), 
+						"TicketOne");
+				listShow.add(show);
+			}
+			page++;
+		} while(page<=tp);
+		
+		System.out.println();
 	}
 
 	private Step stepNews() {
@@ -234,8 +290,10 @@ public class JobConfig extends TelegramLongPollingBot {
 
 	private ItemProcessor<Show, Show> processorShow() {
 		return item -> {
-			List<Show> resultList = entityManager.createQuery("select n from Show n where titolo = :titolo", Show.class)
+			List<Show> resultList = entityManager.createQuery("select n from Show n where titolo = :titolo and fonte = :fonte and des = :des", Show.class)
 					.setParameter("titolo", item.getTitolo())
+					.setParameter("fonte", item.getFonte())
+					.setParameter("des", item.getDes())
 					.getResultList();
 			if (resultList.size()==0) {
 				item.setDataConsegna(LocalDateTime.now());
@@ -273,16 +331,18 @@ public class JobConfig extends TelegramLongPollingBot {
 	}
 	
 	private void inviaMessaggio(String msg)  {
-		SendMessage sendMessage = new SendMessage();
-		sendMessage.enableHtml(true);
-		sendMessage.setParseMode("html");
-		sendMessage.setChatId(ConstantColossium.MY_CHAT_ID);
-		sendMessage.setText(msg);
-		try {
-			Message message = execute(sendMessage);
-			salvaMessaggio(message);
-		} catch (TelegramApiException e) {
-			throw new RuntimeException(e);
+		if (msg != null && !msg.equals("")) {
+			SendMessage sendMessage = new SendMessage();
+			sendMessage.enableHtml(true);
+			sendMessage.setParseMode("html");
+			sendMessage.setChatId(ConstantColossium.MY_CHAT_ID);
+			sendMessage.setText(msg);
+			try {
+				Message message = execute(sendMessage);
+				salvaMessaggio(message);
+			} catch (TelegramApiException e) {
+				throw new RuntimeException(e);
+			}
 		}
 	}
 	

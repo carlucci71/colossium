@@ -15,16 +15,20 @@ public class Show {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private int id;
-	public Show(String data, String titolo, String img, String href) {
+	public Show(String data, String titolo, String img, String href, String des, String fonte) {
 		super();
 		this.data = data;
+		this.setDes(des);
 		this.titolo = titolo;
 		this.img = img;
+		this.fonte=fonte;
 		this.href = href;
 	}
 	private String img;
+	private String des;
 	private String data;
 	private String titolo;
+	private String fonte;
 	private String href;
 	private LocalDateTime dataConsegna;
 	public int getId() {
@@ -66,6 +70,18 @@ public class Show {
 	}
 	public void setDataConsegna(LocalDateTime dataConsegna) {
 		this.dataConsegna = dataConsegna;
+	}
+	public String getFonte() {
+		return fonte;
+	}
+	public void setFonte(String fonte) {
+		this.fonte = fonte;
+	}
+	public String getDes() {
+		return des;
+	}
+	public void setDes(String des) {
+		this.des = des;
 	}
 
 	
