@@ -2,6 +2,7 @@ package it.daniele.colossium.batch;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -74,6 +75,7 @@ public class JobConfig extends TelegramLongPollingBot {
 	@Autowired
 	JobBuilderFactory jobBuilderFactory;
 	
+	Map<String, Integer> totShow=new HashMap<>();
 	
 
 	@Bean
@@ -94,7 +96,7 @@ public class JobConfig extends TelegramLongPollingBot {
 			}
 			public void afterJob(JobExecution jobExecution) {
 				if (jobExecution.getStatus() == BatchStatus.COMPLETED ) {
-			    	inviaMessaggio(esito);
+			    	inviaMessaggio(esito + totShow);
 					logger.info("COMPLETED: {}", jobExecution);
 			    }
 			    else if (jobExecution.getStatus() == BatchStatus.FAILED) {
@@ -126,53 +128,66 @@ public class JobConfig extends TelegramLongPollingBot {
 	private Step stepInit() {
 		return stepBuilderFactory.get("stepInit")
 				.tasklet((contribution, chunkContext) -> {
-					String response = restTemplate.getForObject("https://www.teatrocolosseo.it/News/Default.aspx", String.class);
-					Document doc = Jsoup.parse(response);
-					for (int i=0;i<ConstantColossium.MAX_NEWS;i++) {
-						String textDes = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblDescrizione1]").text();
-						String textData = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblData]").text();
-						String textTitolo = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblTitolo]").text();
-						News news = new News(textData, textTitolo, textDes);
-						listNews.add(news);
-					}
-					response = restTemplate.getForObject("https://www.teatrocolosseo.it/Stagione.aspx", String.class);
-					doc = Jsoup.parse(response);
-					Elements select = doc.select(".boxspet");
-					for (int i=0;i<select.size();i++) {
-						Element element = select.get(i);
-						try {
-							String id = element.select(".spett-box-image").first().attr("id").replace("_imageBox", "");
-							String data = doc.select("span[id*=" + id + "_lblDataIntro]").text();
-							String titolo = doc.select("#"+ id +"_divOverlay1 strong").first().text();
-							String img = "https://www.teatrocolosseo.it/" + element.select(".spett-box-image").first().attr("data-source");
-							String href="https://www.teatrocolosseo.it/" + doc.select("a[id*=" + id + "_hlVisualizza]").first().attr("href");
-							Show show = new Show(data, titolo, img, href, "", "COLOSSEO");
-							listShow.add(show);
-						}
-						catch (Exception e) {
-						}
-					}
-
+					leggiNewsColosseo();
+					leggiShowColosseo();
 					leggiTicketOne();
-					
-					
-					List<TelegramMsg> resultList = entityManager.createQuery("select t from TelegramMsg t where dataEliminazione is null", TelegramMsg.class).getResultList();
-					resultList.forEach(el-> {
-						if (LocalDateTime.now().isAfter(el.getDataConsegna().plusDays(ConstantColossium.DAY_TTL))) {
-							el.setDataEliminazione(LocalDateTime.now());
-							DeleteMessage deleteMessage = new DeleteMessage(ConstantColossium.MY_CHAT_ID, el.getId());
-							try {
-								entityManager.persist(el);
-								execute(deleteMessage);
-							} catch (TelegramApiException e) {
-								throw new RuntimeException(e);
-							}
-						}
-					});
+					leggiConcordia();
+					cancellaNotificheTelegramScadute();
 					return RepeatStatus.FINISHED;
 				})
 				.listener(stepResultListener())
 				.build();
+	}
+
+	private void cancellaNotificheTelegramScadute() {
+		List<TelegramMsg> resultList = entityManager.createQuery("select t from TelegramMsg t where dataEliminazione is null", TelegramMsg.class).getResultList();
+		resultList.forEach(el-> {
+			if (LocalDateTime.now().isAfter(el.getDataConsegna().plusDays(ConstantColossium.DAY_TTL))) {
+				el.setDataEliminazione(LocalDateTime.now());
+				DeleteMessage deleteMessage = new DeleteMessage(ConstantColossium.MY_CHAT_ID, el.getId());
+				try {
+					entityManager.persist(el);
+					execute(deleteMessage);
+				} catch (TelegramApiException e) {
+					throw new RuntimeException(e);
+				}
+			}
+		});
+	}
+
+	private void leggiShowColosseo() {
+		int showIniziali=listShow.size();
+		String fonte = "COLOSSEO";
+		String response = restTemplate.getForObject("https://www.teatrocolosseo.it/Stagione.aspx", String.class);
+		Document doc = Jsoup.parse(response);
+		Elements select = doc.select(".boxspet");
+		for (int i=0;i<select.size();i++) {
+			Element element = select.get(i);
+			try {
+				String id = element.select(".spett-box-image").first().attr("id").replace("_imageBox", "");
+				String data = doc.select("span[id*=" + id + "_lblDataIntro]").text();
+				String titolo = doc.select("#"+ id +"_divOverlay1 strong").first().text();
+				String img = "https://www.teatrocolosseo.it/" + element.select(".spett-box-image").first().attr("data-source");
+				String href="https://www.teatrocolosseo.it/" + doc.select("a[id*=" + id + "_hlVisualizza]").first().attr("href");
+				Show show = new Show(data, titolo, img, href, "", fonte);
+				listShow.add(show);
+			}
+			catch (Exception e) {
+			}
+		}
+		totShow.put(fonte, listShow.size()-showIniziali);
+	}
+
+	private void leggiNewsColosseo() {
+		String response = restTemplate.getForObject("https://www.teatrocolosseo.it/News/Default.aspx", String.class);
+		Document doc = Jsoup.parse(response);
+		for (int i=0;i<ConstantColossium.MAX_NEWS;i++) {
+			String textDes = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblDescrizione1]").text();
+			String textData = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblData]").text();
+			String textTitolo = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblTitolo]").text();
+			News news = new News(textData, textTitolo, textDes);
+			listNews.add(news);
+		}
 	}
 
 	private ObjectMapper mapper = new ObjectMapper();
@@ -199,8 +214,9 @@ public class JobConfig extends TelegramLongPollingBot {
 		}
 	}
 	
-	
 	private void leggiTicketOne() {
+		int showIniziali=listShow.size();
+		String fonte = "TicketOne";
 		int page=1;
 		int tp;
 		do {
@@ -215,15 +231,36 @@ public class JobConfig extends TelegramLongPollingBot {
 						(map.get("imageUrl") != null?map.get("imageUrl").toString():""), 
 						map.get("link").toString(),
 						(map.get("description") != null?map.get("description").toString():""), 
-						"TicketOne");
+						fonte);
 				listShow.add(show);
 			}
 			page++;
 		} while(page<=tp);
-		
-		System.out.println();
+		totShow.put(fonte, listShow.size()-showIniziali);
 	}
 
+	private void leggiConcordia() {
+		int showIniziali=listShow.size();
+		String fonte = "CONCORDIA";
+			String response = restTemplate.getForObject("https://www.teatrodellaconcordia.it/programma-prossimi-eventi/", String.class);
+			Document doc = Jsoup.parse(response);
+			Elements select = doc.select(".list-half-item");
+			for (int i=0;i<select.size();i++) {
+				Element element = select.get(i);
+				try {
+					String data = element.select(".event-date").first().text();
+					String titolo = element.select(".event-title").first().text();
+					String img = element.select(".list-half-image").first().attr("style").replace("background-image:url(", "").replace(")", "");
+					String href = element.select(".list-half-item").first().attr("onclick").replace("window.location='", "").replace("';", "");
+					Show show = new Show(data, titolo, img, href, "", fonte);
+					listShow.add(show);
+				}
+				catch (Exception e) {
+				}
+			}
+			totShow.put(fonte, listShow.size()-showIniziali);
+	}
+	
 	private Step stepNews() {
 		return stepBuilderFactory.get("StepNews")
 				.<News, News> chunk(ConstantColossium.CHUNK)
