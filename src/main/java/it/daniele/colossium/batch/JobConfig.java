@@ -263,7 +263,7 @@ public class JobConfig extends TelegramLongPollingBot {
 						null,
 						map.get("title").toString(), 
 						fonte);
-				System.out.println(show);
+//				System.out.println("1@"+show.toString().replace("\n\r", " "));
 				listShow.add(show);
 			}
 			page++;
@@ -442,6 +442,7 @@ public class JobConfig extends TelegramLongPollingBot {
 		if (false) {
 			System.out.println(Instant.now() + " --> " + msg);
 		} else {
+//			System.out.println("2@"+msg.replace("\n\r", " "));
 			SendPhoto sendPhoto = new SendPhoto();
 			sendPhoto.setChatId(ConstantColossium.MY_CHAT_ID);
 			sendPhoto.setPhoto(new InputFile(imageUrl));
