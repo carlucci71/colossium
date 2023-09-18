@@ -1,3 +1,6 @@
+/*
+https://apigatewayb2cstore.vivaticket.com/api/Events/Search/14/it/it-IT?provinceCode=TO  --> 32 a pagine e chiave al fondo totalItems
+ */
 package it.daniele.colossium.batch;
 
 import java.time.Instant;
@@ -134,12 +137,14 @@ public class JobConfig extends TelegramLongPollingBot {
 					leggiShowColosseo();
 					leggiTicketOne();
 					leggiConcordia();
+					leggiVivaTicket();
 					cancellaNotificheTelegramScadute();
 					return RepeatStatus.FINISHED;
 				})
 				.listener(stepResultListener())
 				.build();
 	}
+
 
 	private void cancellaNotificheTelegramScadute() {
 		List<TelegramMsg> resultList = entityManager.createQuery("select t from TelegramMsg t where dataEliminazione is null", TelegramMsg.class).getResultList();
@@ -240,6 +245,32 @@ public class JobConfig extends TelegramLongPollingBot {
 		} while(page<=tp);
 		totShow.put(fonte, listShow.size()-showIniziali);
 	}
+	
+	private void leggiVivaTicket() {
+		int showIniziali=listShow.size();
+		String fonte = "VivaTicket";
+		int page=1;
+		int ti;
+		do {
+			String response = restTemplate.getForObject("https://apigatewayb2cstore.vivaticket.com/api/Events/Search/" + page + "/it/it-IT?provinceCode=TO", String.class);
+			Map<String, Object> jsonToMap = jsonToMap(response);
+			ti = (int) jsonToMap.get("totalItems");
+			List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("items");
+			for (Map<String, Object> map : l) {
+				Show show = new Show(map.get("startDate").toString(), 
+						map.get("title").toString(), 
+						map.get("image").toString(),
+						null,
+						map.get("category").toString() + " / " + map.get("title").toString() + " / " + map.get("venueName").toString(), 
+						fonte);
+				listShow.add(show);
+			}
+			page++;
+		} while(listShow.size()-showIniziali<ti);
+		totShow.put(fonte, listShow.size()-showIniziali);
+		
+	}
+	
 
 	private void leggiConcordia() {
 		int showIniziali=listShow.size();
