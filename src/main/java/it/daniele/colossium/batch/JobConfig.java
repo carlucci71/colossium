@@ -263,6 +263,7 @@ public class JobConfig extends TelegramLongPollingBot {
 						null,
 						map.get("title").toString(), 
 						fonte);
+				System.out.println(show);
 				listShow.add(show);
 			}
 			page++;
