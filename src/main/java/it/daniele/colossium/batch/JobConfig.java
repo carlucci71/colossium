@@ -258,10 +258,10 @@ public class JobConfig extends TelegramLongPollingBot {
 			List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("items");
 			for (Map<String, Object> map : l) {
 				Show show = new Show(map.get("startDate").toString(), 
-						map.get("title").toString(), 
+						map.get("category").toString() + " / " + map.get("title").toString() + " / " + map.get("venueName").toString(), 
 						map.get("image").toString(),
 						null,
-						map.get("category").toString() + " / " + map.get("title").toString() + " / " + map.get("venueName").toString(), 
+						map.get("title").toString(), 
 						fonte);
 				listShow.add(show);
 			}
