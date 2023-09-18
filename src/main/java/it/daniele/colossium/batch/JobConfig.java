@@ -1,5 +1,6 @@
 package it.daniele.colossium.batch;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -44,6 +45,7 @@ import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -65,7 +67,7 @@ public class JobConfig extends TelegramLongPollingBot {
 
 	@PersistenceContext
 	EntityManager entityManager;
-	
+
 	@Autowired
 	JdbcTemplate jdbcTemplate;
 
@@ -74,9 +76,9 @@ public class JobConfig extends TelegramLongPollingBot {
 
 	@Autowired
 	JobBuilderFactory jobBuilderFactory;
-	
+
 	Map<String, Integer> totShow=new HashMap<>();
-	
+
 
 	@Bean
 	public Job createJob() {
@@ -96,34 +98,34 @@ public class JobConfig extends TelegramLongPollingBot {
 			}
 			public void afterJob(JobExecution jobExecution) {
 				if (jobExecution.getStatus() == BatchStatus.COMPLETED ) {
-			    	inviaMessaggio(esito + totShow);
+					inviaMessaggio(esito + totShow);
 					logger.info("COMPLETED: {}", jobExecution);
-			    }
-			    else if (jobExecution.getStatus() == BatchStatus.FAILED) {
-			    	inviaMessaggio("ERRORE");
-			    	logger.info("FAILED: {}", jobExecution);
-			    }
+				}
+				else if (jobExecution.getStatus() == BatchStatus.FAILED) {
+					inviaMessaggio("ERRORE");
+					logger.info("FAILED: {}", jobExecution);
+				}
 			}
 		};
 	}
 
 	private StepExecutionListener stepResultListener() {
-    	
-        return new StepExecutionListener() {
-        	@Override
-        	public void beforeStep(StepExecution stepExecution) {
-        		logger.debug("Called beforeStep: {}", stepExecution);
-        	}
-        	@Override
-        	public ExitStatus afterStep(StepExecution stepExecution) {
-        		logger.info("Called afterStep: {}", stepExecution);
-        		if (!stepExecution.getStepName().equals("stepInit")) {
-            		esito=esito+stepExecution.getStepName() + ":" + stepExecution.getWriteCount() + "\n\r";
-        		}
-        		return null;
-        	}
-        };
-    }	
+
+		return new StepExecutionListener() {
+			@Override
+			public void beforeStep(StepExecution stepExecution) {
+				logger.debug("Called beforeStep: {}", stepExecution);
+			}
+			@Override
+			public ExitStatus afterStep(StepExecution stepExecution) {
+				logger.info("Called afterStep: {}", stepExecution);
+				if (!stepExecution.getStepName().equals("stepInit")) {
+					esito=esito+stepExecution.getStepName() + ":" + stepExecution.getWriteCount() + "\n\r";
+				}
+				return null;
+			}
+		};
+	}	
 
 	private Step stepInit() {
 		return stepBuilderFactory.get("stepInit")
@@ -202,7 +204,7 @@ public class JobConfig extends TelegramLongPollingBot {
 			throw new RuntimeException(e);
 		} 
 	}
-	
+
 	public Map<String, Object> jsonToMap(String json)
 	{
 		try
@@ -213,7 +215,7 @@ public class JobConfig extends TelegramLongPollingBot {
 			throw new RuntimeException(e);
 		}
 	}
-	
+
 	private void leggiTicketOne() {
 		int showIniziali=listShow.size();
 		String fonte = "TicketOne";
@@ -242,25 +244,25 @@ public class JobConfig extends TelegramLongPollingBot {
 	private void leggiConcordia() {
 		int showIniziali=listShow.size();
 		String fonte = "CONCORDIA";
-			String response = restTemplate.getForObject("https://www.teatrodellaconcordia.it/programma-prossimi-eventi/", String.class);
-			Document doc = Jsoup.parse(response);
-			Elements select = doc.select(".list-half-item");
-			for (int i=0;i<select.size();i++) {
-				Element element = select.get(i);
-				try {
-					String data = element.select(".event-date").first().text();
-					String titolo = element.select(".event-title").first().text();
-					String img = element.select(".list-half-image").first().attr("style").replace("background-image:url(", "").replace(")", "");
-					String href = element.select(".list-half-item").first().attr("onclick").replace("window.location='", "").replace("';", "");
-					Show show = new Show(data, titolo, img, href, "", fonte);
-					listShow.add(show);
-				}
-				catch (Exception e) {
-				}
+		String response = restTemplate.getForObject("https://www.teatrodellaconcordia.it/programma-prossimi-eventi/", String.class);
+		Document doc = Jsoup.parse(response);
+		Elements select = doc.select(".list-half-item");
+		for (int i=0;i<select.size();i++) {
+			Element element = select.get(i);
+			try {
+				String data = element.select(".event-date").first().text();
+				String titolo = element.select(".event-title").first().text();
+				String img = element.select(".list-half-image").first().attr("style").replace("background-image:url(", "").replace(")", "");
+				String href = element.select(".list-half-item").first().attr("onclick").replace("window.location='", "").replace("';", "");
+				Show show = new Show(data, titolo, img, href, "", fonte);
+				listShow.add(show);
 			}
-			totShow.put(fonte, listShow.size()-showIniziali);
+			catch (Exception e) {
+			}
+		}
+		totShow.put(fonte, listShow.size()-showIniziali);
 	}
-	
+
 	private Step stepNews() {
 		return stepBuilderFactory.get("StepNews")
 				.<News, News> chunk(ConstantColossium.CHUNK)
@@ -270,7 +272,7 @@ public class JobConfig extends TelegramLongPollingBot {
 				.listener(stepResultListener())
 				.build();
 	}	
-    
+
 	private ItemReader<News> readerNews() {
 		return () -> {
 			if (posizioneNews>=listNews.size()) return null;
@@ -294,9 +296,13 @@ public class JobConfig extends TelegramLongPollingBot {
 	}
 
 	private ItemWriter<News> writerNews() {
-		return news -> news.forEach(el -> {
+		return news -> {
+			List<News> lll=new ArrayList<>();
+			news.forEach(el -> {
 			if (el.getDataConsegna()!=null) {
 				entityManager.persist(el);
+				lll.add(el);
+				System.out.println(lll.size());
 				inviaMessaggio(el.toString());
 				messaggiInviati++;
 				if (messaggiInviati==ConstantColossium.MAX_NEWS) {
@@ -304,6 +310,9 @@ public class JobConfig extends TelegramLongPollingBot {
 				}
 			}
 		});
+		System.out.println("PAUSA");
+		Thread.currentThread().sleep(1000);
+		};
 	}
 
 	private Step stepShow() {
@@ -340,12 +349,19 @@ public class JobConfig extends TelegramLongPollingBot {
 	}
 
 	private ItemWriter<Show> writerShow() {
-		return shows -> shows.forEach(el -> {
+		return shows -> {
+			List<Show> lll=new ArrayList<>();
+			shows.forEach(el -> {
 			if (el.getDataConsegna()!=null) {
 				entityManager.persist(el);
+				lll.add(el);
+				System.out.println(lll.size());
 				sendImageToChat(el.getImg(),el.toString());
 			}
 		});
+		System.out.println("PAUSA");
+		Thread.currentThread().sleep(1000);
+		};
 	}
 
 	@Override
@@ -363,47 +379,92 @@ public class JobConfig extends TelegramLongPollingBot {
 		con entitymanager errore perchè manca contesto transazionale			
 		TelegramMsg tm = new TelegramMsg(message.getMessageId(), LocalDateTime.now());
 		entityManager.persist(tm);
-		*/
+		 */
 		jdbcTemplate.update("insert into telegram_msg (id,data_consegna) values (?,?)", new Object[] {message.getMessageId(), LocalDateTime.now()});
 	}
-	
+
 	private void inviaMessaggio(String msg)  {
 		if (msg != null && !msg.equals("")) {
-			SendMessage sendMessage = new SendMessage();
-			sendMessage.enableHtml(true);
-			sendMessage.setParseMode("html");
-			sendMessage.setChatId(ConstantColossium.MY_CHAT_ID);
-			sendMessage.setText(msg);
-			try {
-				Message message = execute(sendMessage);
-				salvaMessaggio(message);
-			} catch (TelegramApiException e) {
-				throw new RuntimeException(e);
+			if (false) {
+				System.out.println(Instant.now() + " --> " + msg);
+			} else {
+				SendMessage sendMessage = new SendMessage();
+				sendMessage.enableHtml(true);
+				sendMessage.setParseMode("html");
+				sendMessage.setChatId(ConstantColossium.MY_CHAT_ID);
+				sendMessage.setText(msg);
+				try {
+					Message message = execute(sendMessage);
+					salvaMessaggio(message);
+				} 
+				catch (TelegramApiRequestException e) {
+				    if (e.getErrorCode() == 429) {
+				        int retryAfterSeconds = e.getParameters().getRetryAfter();
+				        // Attendi per il periodo specificato prima di ritentare la richiesta
+				        try {
+				        	Thread.sleep(retryAfterSeconds * 1000);
+				        } catch (Exception e2) {
+							throw new RuntimeException(e2);
+				        }
+				        inviaMessaggio(msg);
+				    } else {
+						throw new RuntimeException(e);
+				    }
+				}
+				catch (TelegramApiException e) {
+					throw new RuntimeException(e);
+				}
 			}
 		}
 	}
-	
-	private void sendImageToChat(String imageUrl, String caption) {
-		SendPhoto sendPhoto = new SendPhoto();
-		sendPhoto.setChatId(ConstantColossium.MY_CHAT_ID);
-		sendPhoto.setPhoto(new InputFile(imageUrl));
-		sendPhoto.setCaption(caption);
-		try {
-			Message message = execute(sendPhoto);
-			salvaMessaggio(message);
-		} catch (TelegramApiException e) {
+
+	private void sendImageToChat(String imageUrl, String msg) {
+		if (false) {
+			System.out.println(Instant.now() + " --> " + msg);
+		} else {
+			SendPhoto sendPhoto = new SendPhoto();
+			sendPhoto.setChatId(ConstantColossium.MY_CHAT_ID);
+			sendPhoto.setPhoto(new InputFile(imageUrl));
+			sendPhoto.setCaption(msg);
 			try {
-				sendPhoto.setPhoto(new InputFile("https://www.teatrocolosseo.it/images/throbber.gif"));
 				Message message = execute(sendPhoto);
 				salvaMessaggio(message);
+			} 
+			catch (TelegramApiRequestException e) {
+			    if (e.getErrorCode() == 429) {
+			        int retryAfterSeconds = e.getParameters().getRetryAfter();
+			        // Attendi per il periodo specificato prima di ritentare la richiesta
+			        try {
+			        	Thread.sleep(retryAfterSeconds * 1000);
+			        } catch (Exception e2) {
+						throw new RuntimeException(e2);
+			        }
+			        sendImageToChat(imageUrl, msg);
+			    } else {
+					try {
+						sendPhoto.setPhoto(new InputFile("https://www.teatrocolosseo.it/images/throbber.gif"));
+						Message message = execute(sendPhoto);
+						salvaMessaggio(message);
+					}
+					catch (TelegramApiException e2) {
+						inviaMessaggio("**** NO IMG *** \n\r" + msg);
+					}
+			    }
 			}
-			catch (TelegramApiException e2) {
-				inviaMessaggio("**** NO IMG *** \n\r" + caption);
+			catch (TelegramApiException e) {
+				try {
+					sendPhoto.setPhoto(new InputFile("https://www.teatrocolosseo.it/images/throbber.gif"));
+					Message message = execute(sendPhoto);
+					salvaMessaggio(message);
+				}
+				catch (TelegramApiException e2) {
+					inviaMessaggio("**** NO IMG *** \n\r" + msg);
+				}
 			}
 		}
 	}
-	
-	
+
+
 	@Override
 	public void onUpdateReceived(Update update) {
 	}
@@ -414,7 +475,7 @@ public class JobConfig extends TelegramLongPollingBot {
 	int posizioneNews=0;
 	int posizioneShow=0;
 	String esito="";
-	
+
 
 
 }
