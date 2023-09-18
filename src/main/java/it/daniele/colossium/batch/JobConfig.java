@@ -296,13 +296,10 @@ public class JobConfig extends TelegramLongPollingBot {
 	}
 
 	private ItemWriter<News> writerNews() {
-		return news -> {
-			List<News> lll=new ArrayList<>();
+		return news -> 
 			news.forEach(el -> {
 			if (el.getDataConsegna()!=null) {
 				entityManager.persist(el);
-				lll.add(el);
-				System.out.println(lll.size());
 				inviaMessaggio(el.toString());
 				messaggiInviati++;
 				if (messaggiInviati==ConstantColossium.MAX_NEWS) {
@@ -310,9 +307,6 @@ public class JobConfig extends TelegramLongPollingBot {
 				}
 			}
 		});
-		System.out.println("PAUSA");
-		Thread.currentThread().sleep(1000);
-		};
 	}
 
 	private Step stepShow() {
@@ -349,19 +343,13 @@ public class JobConfig extends TelegramLongPollingBot {
 	}
 
 	private ItemWriter<Show> writerShow() {
-		return shows -> {
-			List<Show> lll=new ArrayList<>();
+		return shows -> 
 			shows.forEach(el -> {
 			if (el.getDataConsegna()!=null) {
 				entityManager.persist(el);
-				lll.add(el);
-				System.out.println(lll.size());
 				sendImageToChat(el.getImg(),el.toString());
 			}
 		});
-		System.out.println("PAUSA");
-		Thread.currentThread().sleep(1000);
-		};
 	}
 
 	@Override
