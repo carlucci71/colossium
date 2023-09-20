@@ -252,19 +252,21 @@ public class JobConfig extends TelegramLongPollingBot {
 		int page=1;
 		int ti;
 		do {
-			String response = restTemplate.getForObject("https://apigatewayb2cstore.vivaticket.com/api/Events/Search/" + page + "/it/it-IT?provinceCode=TO", String.class);
+			String url = "https://apigatewayb2cstore.vivaticket.com/api/Events/Search/" + page + "/it/it-IT?provinceCode=TO";
+			System.out.println(url);
+			String response = restTemplate.getForObject(url, String.class);
 			Map<String, Object> jsonToMap = jsonToMap(response);
 			ti = (int) jsonToMap.get("totalItems");
 			List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("items");
 			for (Map<String, Object> map : l) {
-				Show show = new Show(map.get("startDate").toString(), 
+				Show show = new Show(map.get("startDate")==null?"-":map.get("startDate").toString(), 
 						map.get("category").toString() + " / " + map.get("title").toString() + " / " + map.get("venueName").toString(), 
 						map.get("image").toString(),
 						null,
 						map.get("title").toString(), 
 						fonte);
-//				System.out.println("1@"+show.toString().replace("\n\r", " "));
 				listShow.add(show);
+//				System.out.println("1@"+show.toString().replace("\n\r", " "));
 			}
 			page++;
 		} while(listShow.size()-showIniziali<ti);
