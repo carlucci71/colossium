@@ -156,7 +156,7 @@ public class JobConfig extends TelegramLongPollingBot {
 					entityManager.persist(el);
 					execute(deleteMessage);
 				} catch (TelegramApiException e) {
-					throw new RuntimeException(e);
+					e.printStackTrace(System.out);
 				}
 			}
 		});
