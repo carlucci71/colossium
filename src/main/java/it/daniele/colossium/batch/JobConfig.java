@@ -38,6 +38,10 @@ import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.client.RestTemplate;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
@@ -49,10 +53,6 @@ import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import it.daniele.colossium.domain.News;
 import it.daniele.colossium.domain.Show;
@@ -138,6 +138,7 @@ public class JobConfig extends TelegramLongPollingBot {
 					leggiTicketOne();
 					leggiConcordia();
 					leggiVivaTicket();
+					leggiDice();
 					cancellaNotificheTelegramScadute();
 					return RepeatStatus.FINISHED;
 				})
@@ -198,39 +199,14 @@ public class JobConfig extends TelegramLongPollingBot {
 		}
 	}
 
-	private ObjectMapper mapper = new ObjectMapper();
-	public String toJson(Object o)
-	{
-		try
-		{
-			byte[] data = mapper.writeValueAsBytes(o);
-			return new String(data);
-		} catch (JsonProcessingException e)
-		{
-			throw new RuntimeException(e);
-		} 
-	}
-
-	public Map<String, Object> jsonToMap(String json)
-	{
-		try
-		{
-			return mapper.readValue(json, new TypeReference<Map<String, Object>>(){});
-		} catch (Exception e)
-		{
-			throw new RuntimeException(e);
-		}
-	}
-
 	private void leggiTicketOne() {
 		int showIniziali=listShow.size();
 		String fonte = "TicketOne";
 		int page=1;
 		int tp;
 		do {
-			String response = restTemplate.getForObject("https://public-api.eventim.com/websearch/search/api/exploration/v2/productGroups?webId=web__ticketone-it&language=it&page="
-					+ page + "&city_ids=217&city_ids=null", String.class);
-			Map<String, Object> jsonToMap = jsonToMap(response);
+			Map<String, Object> jsonToMap = restTemplate.getForObject("https://public-api.eventim.com/websearch/search/api/exploration/v2/productGroups?webId=web__ticketone-it&language=it&page="
+					+ page + "&city_ids=217&city_ids=null", Map.class);
 			tp = (int) jsonToMap.get("totalPages");
 			List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("productGroups");
 			for (Map<String, Object> map : l) {
@@ -246,7 +222,7 @@ public class JobConfig extends TelegramLongPollingBot {
 		} while(page<=tp);
 		totShow.put(fonte, listShow.size()-showIniziali);
 	}
-	
+
 	private void leggiVivaTicket() {
 		int showIniziali=listShow.size();
 		String fonte = "VivaTicket";
@@ -255,8 +231,7 @@ public class JobConfig extends TelegramLongPollingBot {
 		do {
 			String url = "https://apigatewayb2cstore.vivaticket.com/api/Events/Search/" + page + "/it/it-IT?provinceCode=TO";
 			System.out.println(url);
-			String response = restTemplate.getForObject(url, String.class);
-			Map<String, Object> jsonToMap = jsonToMap(response);
+			Map<String, Object> jsonToMap = restTemplate.getForObject(url, Map.class);
 			ti = (int) jsonToMap.get("totalItems");
 			List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("items");
 			for (Map<String, Object> map : l) {
@@ -267,14 +242,69 @@ public class JobConfig extends TelegramLongPollingBot {
 						map.get("title").toString(), 
 						fonte);
 				listShow.add(show);
-//				System.out.println("1@"+show.toString().replace("\n\r", " "));
+				//				System.out.println("1@"+show.toString().replace("\n\r", " "));
 			}
 			page++;
 		} while(listShow.size()-showIniziali<ti);
 		totShow.put(fonte, listShow.size()-showIniziali);
-		
+
 	}
-	
+
+	private void leggiDice() {
+		int showIniziali=listShow.size();
+		String fonte = "Dice";
+		int ti;
+		String url = "https://api.dice.fm/unified_search";
+		String requestBody = "{\"q\":\"\"}";
+		HttpHeaders headers = new HttpHeaders();
+		headers.setContentType(MediaType.APPLICATION_JSON);
+		headers.set("Host", "xx"); // Esempio di header di autorizzazione
+		HttpEntity<String> requestEntity = new HttpEntity<>(requestBody, headers);
+		ResponseEntity<Map> responseEntity = restTemplate.postForEntity(url, requestEntity, Map.class);
+		List<Map> elementi = (List) responseEntity.getBody().get("sections");
+		for (Map map : elementi) {
+			if(map.get("items")!=null) {
+				List<Map> items = (List) map.get("items");
+				for (Map item : items) {
+					Map single = (Map) item.get("event");
+
+					String date="";
+					String nome="";
+					String img = ""; 
+					String href = ""; 
+					String des = "";
+					try {
+						date=((Map)((Map)single).get("dates")).get("event_start_date").toString();
+					}
+					catch (Exception e){};
+					try {
+						nome= single.get("name").toString() + " - " + ((List<Map>)single.get("venues")).get(0).get("name").toString();//name + address;
+					}
+					catch (Exception e){};
+					try {
+						img=((Map)((Map)single).get("images")).get("square").toString();
+					}
+					catch (Exception e){};
+					try {
+						href=((Map)((Map)single).get("social_links")).get("event_share").toString();
+					}
+					catch (Exception e){};
+					try {
+						des = ((Map)((Map)single).get("about")).get("description").toString();
+					}
+					catch (Exception e){};
+
+					Show show = new Show(date, nome, img, href, des, fonte); 
+					listShow.add(show);
+
+				}
+			};
+		}
+
+		totShow.put(fonte, listShow.size()-showIniziali);
+
+	}
+
 
 	private void leggiConcordia() {
 		int showIniziali=listShow.size();
@@ -332,7 +362,7 @@ public class JobConfig extends TelegramLongPollingBot {
 
 	private ItemWriter<News> writerNews() {
 		return news -> 
-			news.forEach(el -> {
+		news.forEach(el -> {
 			if (el.getDataConsegna()!=null) {
 				entityManager.persist(el);
 				inviaMessaggio(el.toString());
@@ -379,7 +409,7 @@ public class JobConfig extends TelegramLongPollingBot {
 
 	private ItemWriter<Show> writerShow() {
 		return shows -> 
-			shows.forEach(el -> {
+		shows.forEach(el -> {
 			if (el.getDataConsegna()!=null) {
 				entityManager.persist(el);
 				sendImageToChat(el.getImg(),el.toString());
@@ -421,18 +451,18 @@ public class JobConfig extends TelegramLongPollingBot {
 					salvaMessaggio(message);
 				} 
 				catch (TelegramApiRequestException e) {
-				    if (e.getErrorCode() == 429) {
-				        int retryAfterSeconds = e.getParameters().getRetryAfter();
-				        // Attendi per il periodo specificato prima di ritentare la richiesta
-				        try {
-				        	Thread.sleep(retryAfterSeconds * 1000);
-				        } catch (Exception e2) {
+					if (e.getErrorCode() == 429) {
+						int retryAfterSeconds = e.getParameters().getRetryAfter();
+						// Attendi per il periodo specificato prima di ritentare la richiesta
+						try {
+							Thread.sleep(retryAfterSeconds * 1000);
+						} catch (Exception e2) {
 							throw new RuntimeException(e2);
-				        }
-				        inviaMessaggio(msg);
-				    } else {
+						}
+						inviaMessaggio(msg);
+					} else {
 						throw new RuntimeException(e);
-				    }
+					}
 				}
 				catch (TelegramApiException e) {
 					throw new RuntimeException(e);
@@ -445,7 +475,7 @@ public class JobConfig extends TelegramLongPollingBot {
 		if (false) {
 			System.out.println(Instant.now() + " --> " + msg);
 		} else {
-//			System.out.println("2@"+msg.replace("\n\r", " "));
+			//			System.out.println("2@"+msg.replace("\n\r", " "));
 			SendPhoto sendPhoto = new SendPhoto();
 			sendPhoto.setChatId(ConstantColossium.MY_CHAT_ID);
 			sendPhoto.setPhoto(new InputFile(imageUrl));
@@ -455,16 +485,16 @@ public class JobConfig extends TelegramLongPollingBot {
 				salvaMessaggio(message);
 			} 
 			catch (TelegramApiRequestException e) {
-			    if (e.getErrorCode() == 429) {
-			        int retryAfterSeconds = e.getParameters().getRetryAfter();
-			        // Attendi per il periodo specificato prima di ritentare la richiesta
-			        try {
-			        	Thread.sleep(retryAfterSeconds * 1000);
-			        } catch (Exception e2) {
+				if (e.getErrorCode() == 429) {
+					int retryAfterSeconds = e.getParameters().getRetryAfter();
+					// Attendi per il periodo specificato prima di ritentare la richiesta
+					try {
+						Thread.sleep(retryAfterSeconds * 1000);
+					} catch (Exception e2) {
 						throw new RuntimeException(e2);
-			        }
-			        sendImageToChat(imageUrl, msg);
-			    } else {
+					}
+					sendImageToChat(imageUrl, msg);
+				} else {
 					try {
 						sendPhoto.setPhoto(new InputFile("https://www.teatrocolosseo.it/images/throbber.gif"));
 						Message message = execute(sendPhoto);
@@ -473,7 +503,7 @@ public class JobConfig extends TelegramLongPollingBot {
 					catch (TelegramApiException e2) {
 						inviaMessaggio("**** NO IMG *** \n\r" + msg);
 					}
-			    }
+				}
 			}
 			catch (TelegramApiException e) {
 				try {
