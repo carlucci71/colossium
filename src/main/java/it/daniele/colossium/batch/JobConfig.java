@@ -157,6 +157,7 @@ public class JobConfig extends TelegramLongPollingBot {
 					execute(deleteMessage);
 				} catch (TelegramApiException e) {
 					e.printStackTrace(System.out);
+					esito=esito + "WARNING CANCELLA NOTIFICHE\n\r";
 				}
 			}
 		});
