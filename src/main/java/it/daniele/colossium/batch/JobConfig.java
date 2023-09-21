@@ -255,7 +255,7 @@ public class JobConfig extends TelegramLongPollingBot {
 		String fonte = "Dice";
 		int ti;
 		String url = "https://api.dice.fm/unified_search";
-		String requestBody = "{\"q\":\"\"}";
+		String requestBody = "{\"q\":\"torino\"}";
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
 		headers.set("Host", "xx"); // Esempio di header di autorizzazione
