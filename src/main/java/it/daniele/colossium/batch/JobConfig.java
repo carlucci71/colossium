@@ -293,7 +293,7 @@ public class JobConfig extends TelegramLongPollingBot {
 				}
 				catch (Exception e){};
 				try {
-					img=map.get("imageUrl").toString();
+					img="http:" + map.get("imageUrl").toString();
 				}
 				catch (Exception e){};
 				try {
