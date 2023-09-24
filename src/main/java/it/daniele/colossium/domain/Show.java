@@ -63,7 +63,7 @@ public class Show {
 	}
 	@Override
 	public String toString() {
-		return data + "\n\r" + titolo + "\n\r" + href;
+		return data + "\n\r" + titolo + "\n\r" + (href==null?"":href);
 	}
 	public LocalDateTime getDataConsegna() {
 		return dataConsegna;

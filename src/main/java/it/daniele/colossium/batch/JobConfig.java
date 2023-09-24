@@ -1,6 +1,4 @@
-/*
-https://apigatewayb2cstore.vivaticket.com/api/Events/Search/14/it/it-IT?provinceCode=TO  --> 32 a pagine e chiave al fondo totalItems
- */
+
 package it.daniele.colossium.batch;
 
 import java.time.Instant;
@@ -139,12 +137,14 @@ public class JobConfig extends TelegramLongPollingBot {
 					leggiConcordia();
 					leggiVivaTicket();
 					leggiDice();
+					leggiTicketMaster();
 					cancellaNotificheTelegramScadute();
 					return RepeatStatus.FINISHED;
 				})
 				.listener(stepResultListener())
 				.build();
 	}
+
 
 
 	private void cancellaNotificheTelegramScadute() {
@@ -157,7 +157,7 @@ public class JobConfig extends TelegramLongPollingBot {
 					entityManager.persist(el);
 					execute(deleteMessage);
 				} catch (TelegramApiException e) {
-					e.printStackTrace(System.out);
+					logger.error(e.getMessage(),e);
 					esito=esito + "WARNING CANCELLA NOTIFICHE\n\r";
 				}
 			}
@@ -174,11 +174,33 @@ public class JobConfig extends TelegramLongPollingBot {
 			Element element = select.get(i);
 			try {
 				String id = element.select(".spett-box-image").first().attr("id").replace("_imageBox", "");
-				String data = doc.select("span[id*=" + id + "_lblDataIntro]").text();
-				String titolo = doc.select("#"+ id +"_divOverlay1 strong").first().text();
-				String img = "https://www.teatrocolosseo.it/" + element.select(".spett-box-image").first().attr("data-source");
-				String href="https://www.teatrocolosseo.it/" + doc.select("a[id*=" + id + "_hlVisualizza]").first().attr("href");
-				Show show = new Show(data, titolo, img, href, "", fonte);
+				String data="";
+				String titolo="";
+				String img = ""; 
+				String href = ""; 
+				String des = "";
+
+				try {
+					data = doc.select("span[id*=" + id + "_lblDataIntro]").text();
+				}
+				catch (Exception e){};
+				try {
+					titolo = doc.select("#"+ id +"_divOverlay1 strong").first().text();
+				}
+				catch (Exception e){};
+				try {
+					img = "https://www.teatrocolosseo.it/" + element.select(".spett-box-image").first().attr("data-source");
+				}
+				catch (Exception e){};
+				try {
+					href="https://www.teatrocolosseo.it/" + doc.select("a[id*=" + id + "_hlVisualizza]").first().attr("href");
+				}
+				catch (Exception e){};
+				try {
+					des="";
+				}
+				catch (Exception e){};
+				Show show = new Show(data, titolo, img, href, des, fonte);
 				listShow.add(show);
 			}
 			catch (Exception e) {
@@ -210,12 +232,33 @@ public class JobConfig extends TelegramLongPollingBot {
 			tp = (int) jsonToMap.get("totalPages");
 			List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("productGroups");
 			for (Map<String, Object> map : l) {
-				Show show = new Show(map.get("startDate").toString(), 
-						map.get("name").toString(), 
-						(map.get("imageUrl") != null?map.get("imageUrl").toString():""), 
-						map.get("link").toString(),
-						(map.get("description") != null?map.get("description").toString():""), 
-						fonte);
+				String data="";
+				String titolo="";
+				String img = ""; 
+				String href = ""; 
+				String des = "";
+
+				try {
+					data = map.get("startDate").toString();
+				}
+				catch (Exception e){};
+				try {
+					titolo=map.get("name").toString();
+				}
+				catch (Exception e){};
+				try {
+					img=(map.get("imageUrl") != null?map.get("imageUrl").toString():"");
+				}
+				catch (Exception e){};
+				try {
+					href=map.get("link").toString();
+				}
+				catch (Exception e){};
+				try {
+					des=(map.get("description") != null?map.get("description").toString():""); 
+				}
+				catch (Exception e){};
+				Show show = new Show(data, titolo, img, href, des, fonte);
 				listShow.add(show);
 			}
 			page++;
@@ -223,6 +266,51 @@ public class JobConfig extends TelegramLongPollingBot {
 		totShow.put(fonte, listShow.size()-showIniziali);
 	}
 
+	private void leggiTicketMaster() {
+		int showIniziali=listShow.size();
+		String fonte = "TicketMaster";
+		int page=0;
+		int ti;
+		do {
+			String url = "https://www.ticketmaster.it/api/search/events?q=torino&region=913&sort=date&page=" + page;
+			logger.debug("{}", url);
+			Map<String, Object> jsonToMap = restTemplate.getForObject(url, Map.class);
+			ti = (int) jsonToMap.get("total");
+			List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("events");
+			for (Map<String, Object> map : l) {
+				String data="";
+				String titolo="";
+				String img = ""; 
+				String href = ""; 
+				String des = "";
+
+				try {
+					data = ((Map)map.get("dates")).get("startDate").toString();
+				}
+				catch (Exception e){};
+				try {
+					titolo=map.get("title").toString();
+				}
+				catch (Exception e){};
+				try {
+					img=map.get("imageUrl").toString();
+				}
+				catch (Exception e){};
+				try {
+					href=map.get("url").toString();
+				}
+				catch (Exception e){};
+				try {
+					des=map.get("title").toString() + "/" + ((Map)map.get("venue")).get("name").toString(); 
+				}
+				catch (Exception e){};
+				Show show = new Show(data, titolo, img, href, des, fonte);
+				listShow.add(show);
+			}
+			page++;
+		} while(listShow.size()-showIniziali<ti);
+		totShow.put(fonte, listShow.size()-showIniziali);
+	}
 	private void leggiVivaTicket() {
 		int showIniziali=listShow.size();
 		String fonte = "VivaTicket";
@@ -230,24 +318,43 @@ public class JobConfig extends TelegramLongPollingBot {
 		int ti;
 		do {
 			String url = "https://apigatewayb2cstore.vivaticket.com/api/Events/Search/" + page + "/it/it-IT?provinceCode=TO";
-			System.out.println(url);
+			logger.debug("{}", url);
 			Map<String, Object> jsonToMap = restTemplate.getForObject(url, Map.class);
 			ti = (int) jsonToMap.get("totalItems");
 			List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("items");
 			for (Map<String, Object> map : l) {
-				Show show = new Show(map.get("startDate")==null?"-":map.get("startDate").toString(), 
-						map.get("category").toString() + " / " + map.get("title").toString() + " / " + map.get("venueName").toString(), 
-						map.get("image").toString(),
-						null,
-						map.get("title").toString(), 
-						fonte);
+				String data="";
+				String titolo="";
+				String img = ""; 
+				String href = ""; 
+				String des = "";
+				try {
+					data=map.get("startDate")==null?"-":map.get("startDate").toString();
+				}
+				catch (Exception e){};
+				try {
+					titolo= map.get("category").toString() + " / " + map.get("title").toString() + " / " + map.get("venueName").toString();
+				}
+				catch (Exception e){};
+				try {
+					img=map.get("image").toString();
+				}
+				catch (Exception e){};
+				try {
+					href="";
+				}
+				catch (Exception e){};
+				try {
+					des = map.get("title").toString();
+				}
+				catch (Exception e){};
+
+				Show show = new Show(data, titolo, img, href, des, fonte);
 				listShow.add(show);
-				//				System.out.println("1@"+show.toString().replace("\n\r", " "));
 			}
 			page++;
 		} while(listShow.size()-showIniziali<ti);
 		totShow.put(fonte, listShow.size()-showIniziali);
-
 	}
 
 	private void leggiDice() {
@@ -268,17 +375,17 @@ public class JobConfig extends TelegramLongPollingBot {
 				for (Map item : items) {
 					Map single = (Map) item.get("event");
 
-					String date="";
-					String nome="";
+					String data="";
+					String titolo="";
 					String img = ""; 
 					String href = ""; 
 					String des = "";
 					try {
-						date=((Map)((Map)single).get("dates")).get("event_start_date").toString();
+						data=((Map)((Map)single).get("dates")).get("event_start_date").toString();
 					}
 					catch (Exception e){};
 					try {
-						nome= single.get("name").toString() + " - " + ((List<Map>)single.get("venues")).get(0).get("name").toString();//name + address;
+						titolo= single.get("name").toString() + " - " + ((List<Map>)single.get("venues")).get(0).get("name").toString();//name + address;
 					}
 					catch (Exception e){};
 					try {
@@ -294,7 +401,7 @@ public class JobConfig extends TelegramLongPollingBot {
 					}
 					catch (Exception e){};
 
-					Show show = new Show(date, nome, img, href, des, fonte); 
+					Show show = new Show(data, titolo, img, href, des, fonte); 
 					listShow.add(show);
 
 				}
@@ -315,11 +422,33 @@ public class JobConfig extends TelegramLongPollingBot {
 		for (int i=0;i<select.size();i++) {
 			Element element = select.get(i);
 			try {
-				String data = element.select(".event-date").first().text();
-				String titolo = element.select(".event-title").first().text();
-				String img = element.select(".list-half-image").first().attr("style").replace("background-image:url(", "").replace(")", "");
-				String href = element.select(".list-half-item").first().attr("onclick").replace("window.location='", "").replace("';", "");
-				Show show = new Show(data, titolo, img, href, "", fonte);
+				String data="";
+				String titolo="";
+				String img = ""; 
+				String href = ""; 
+				String des = "";
+
+				try {
+					data = element.select(".event-date").first().text();
+				}
+				catch (Exception e){};
+				try {
+					titolo = element.select(".event-title").first().text();
+				}
+				catch (Exception e){};
+				try {
+					img = element.select(".list-half-image").first().attr("style").replace("background-image:url(", "").replace(")", "");
+				}
+				catch (Exception e){};
+				try {
+					href = element.select(".list-half-item").first().attr("onclick").replace("window.location='", "").replace("';", "");
+				}
+				catch (Exception e){};
+				try {
+					des="";
+				}
+				catch (Exception e){};
+				Show show = new Show(data, titolo, img, href, des, fonte);
 				listShow.add(show);
 			}
 			catch (Exception e) {
@@ -438,50 +567,13 @@ public class JobConfig extends TelegramLongPollingBot {
 
 	private void inviaMessaggio(String msg)  {
 		if (msg != null && !msg.equals("")) {
-			if (false) {
-				System.out.println(Instant.now() + " --> " + msg);
-			} else {
-				SendMessage sendMessage = new SendMessage();
-				sendMessage.enableHtml(true);
-				sendMessage.setParseMode("html");
-				sendMessage.setChatId(ConstantColossium.MY_CHAT_ID);
-				sendMessage.setText(msg);
-				try {
-					Message message = execute(sendMessage);
-					salvaMessaggio(message);
-				} 
-				catch (TelegramApiRequestException e) {
-					if (e.getErrorCode() == 429) {
-						int retryAfterSeconds = e.getParameters().getRetryAfter();
-						// Attendi per il periodo specificato prima di ritentare la richiesta
-						try {
-							Thread.sleep(retryAfterSeconds * 1000);
-						} catch (Exception e2) {
-							throw new RuntimeException(e2);
-						}
-						inviaMessaggio(msg);
-					} else {
-						throw new RuntimeException(e);
-					}
-				}
-				catch (TelegramApiException e) {
-					throw new RuntimeException(e);
-				}
-			}
-		}
-	}
-
-	private void sendImageToChat(String imageUrl, String msg) {
-		if (false) {
-			System.out.println(Instant.now() + " --> " + msg);
-		} else {
-			//			System.out.println("2@"+msg.replace("\n\r", " "));
-			SendPhoto sendPhoto = new SendPhoto();
-			sendPhoto.setChatId(ConstantColossium.MY_CHAT_ID);
-			sendPhoto.setPhoto(new InputFile(imageUrl));
-			sendPhoto.setCaption(msg);
+			SendMessage sendMessage = new SendMessage();
+			sendMessage.enableHtml(true);
+			sendMessage.setParseMode("html");
+			sendMessage.setChatId(ConstantColossium.MY_CHAT_ID);
+			sendMessage.setText(msg);
 			try {
-				Message message = execute(sendPhoto);
+				Message message = execute(sendMessage);
 				salvaMessaggio(message);
 			} 
 			catch (TelegramApiRequestException e) {
@@ -493,19 +585,37 @@ public class JobConfig extends TelegramLongPollingBot {
 					} catch (Exception e2) {
 						throw new RuntimeException(e2);
 					}
-					sendImageToChat(imageUrl, msg);
+					inviaMessaggio(msg);
 				} else {
-					try {
-						sendPhoto.setPhoto(new InputFile("https://www.teatrocolosseo.it/images/throbber.gif"));
-						Message message = execute(sendPhoto);
-						salvaMessaggio(message);
-					}
-					catch (TelegramApiException e2) {
-						inviaMessaggio("**** NO IMG *** \n\r" + msg);
-					}
+					throw new RuntimeException(e);
 				}
 			}
 			catch (TelegramApiException e) {
+				throw new RuntimeException(e);
+			}
+		}
+	}
+
+	private void sendImageToChat(String imageUrl, String msg) {
+		SendPhoto sendPhoto = new SendPhoto();
+		sendPhoto.setChatId(ConstantColossium.MY_CHAT_ID);
+		sendPhoto.setPhoto(new InputFile(imageUrl));
+		sendPhoto.setCaption(msg);
+		try {
+			Message message = execute(sendPhoto);
+			salvaMessaggio(message);
+		} 
+		catch (TelegramApiRequestException e) {
+			if (e.getErrorCode() == 429) {
+				int retryAfterSeconds = e.getParameters().getRetryAfter();
+				// Attendi per il periodo specificato prima di ritentare la richiesta
+				try {
+					Thread.sleep(retryAfterSeconds * 1000);
+				} catch (Exception e2) {
+					throw new RuntimeException(e2);
+				}
+				sendImageToChat(imageUrl, msg);
+			} else {
 				try {
 					sendPhoto.setPhoto(new InputFile("https://www.teatrocolosseo.it/images/throbber.gif"));
 					Message message = execute(sendPhoto);
@@ -514,6 +624,16 @@ public class JobConfig extends TelegramLongPollingBot {
 				catch (TelegramApiException e2) {
 					inviaMessaggio("**** NO IMG *** \n\r" + msg);
 				}
+			}
+		}
+		catch (TelegramApiException e) {
+			try {
+				sendPhoto.setPhoto(new InputFile("https://www.teatrocolosseo.it/images/throbber.gif"));
+				Message message = execute(sendPhoto);
+				salvaMessaggio(message);
+			}
+			catch (TelegramApiException e2) {
+				inviaMessaggio("**** NO IMG *** \n\r" + msg);
 			}
 		}
 	}
