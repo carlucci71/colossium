@@ -492,7 +492,7 @@ public class JobConfig extends TelegramLongPollingBot {
 	private ItemWriter<News> writerNews() {
 		return news -> 
 		news.forEach(el -> {
-			if (el.getDataConsegna()!=null && !el.toString().equals("")) {
+			if (el.getDataConsegna()!=null && !el.toString().trim().equals("")) {
 				entityManager.persist(el);
 				inviaMessaggio(el.toString());
 				messaggiInviati++;
