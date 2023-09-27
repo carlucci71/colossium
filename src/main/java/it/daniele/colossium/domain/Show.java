@@ -15,7 +15,7 @@ public class Show {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private int id;
-	public Show(String data, String titolo, String img, String href, String des, String fonte) {
+	public Show(String data, String titolo, String img, String href, String des, String fonte, String from) {
 		super();
 		this.data = data;
 		this.setDes(des);
@@ -29,6 +29,7 @@ public class Show {
 	private String data;
 	private String titolo;
 	private String fonte;
+	private String from;
 	private String href;
 	private LocalDateTime dataConsegna;
 	public int getId() {
@@ -63,7 +64,7 @@ public class Show {
 	}
 	@Override
 	public String toString() {
-		return data + "\n\r" + titolo + "\n\r" + (href==null?"":href);
+		return data + "\n\r" + titolo + "\n\r" + (href==null?"":href) + "\n\r" + from;
 	}
 	public LocalDateTime getDataConsegna() {
 		return dataConsegna;
@@ -82,6 +83,12 @@ public class Show {
 	}
 	public void setDes(String des) {
 		this.des = des;
+	}
+	public String getFrom() {
+		return from;
+	}
+	public void setFrom(String from) {
+		this.from = from;
 	}
 
 	

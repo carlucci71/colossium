@@ -167,7 +167,8 @@ public class JobConfig extends TelegramLongPollingBot {
 	private void leggiShowColosseo() {
 		int showIniziali=listShow.size();
 		String fonte = "COLOSSEO";
-		String response = restTemplate.getForObject("https://www.teatrocolosseo.it/Stagione.aspx", String.class);
+		String from = "https://www.teatrocolosseo.it/Stagione.aspx";
+		String response = restTemplate.getForObject(from, String.class);
 		Document doc = Jsoup.parse(response);
 		Elements select = doc.select(".boxspet");
 		for (int i=0;i<select.size();i++) {
@@ -200,7 +201,7 @@ public class JobConfig extends TelegramLongPollingBot {
 					des="";
 				}
 				catch (Exception e){};
-				Show show = new Show(data, titolo, img, href, des, fonte);
+				Show show = new Show(data, titolo, img, href, des, fonte, from);
 				listShow.add(show);
 			}
 			catch (Exception e) {
@@ -227,8 +228,9 @@ public class JobConfig extends TelegramLongPollingBot {
 		int page=1;
 		int tp;
 		do {
-			Map<String, Object> jsonToMap = restTemplate.getForObject("https://public-api.eventim.com/websearch/search/api/exploration/v2/productGroups?webId=web__ticketone-it&language=it&page="
-					+ page + "&city_ids=217&city_ids=null", Map.class);
+			String from = "https://public-api.eventim.com/websearch/search/api/exploration/v2/productGroups?webId=web__ticketone-it&language=it&page="
+					+ page + "&city_ids=217&city_ids=null";
+			Map<String, Object> jsonToMap = restTemplate.getForObject(from, Map.class);
 			tp = (int) jsonToMap.get("totalPages");
 			List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("productGroups");
 			for (Map<String, Object> map : l) {
@@ -258,7 +260,7 @@ public class JobConfig extends TelegramLongPollingBot {
 					des=(map.get("description") != null?map.get("description").toString():""); 
 				}
 				catch (Exception e){};
-				Show show = new Show(data, titolo, img, href, des, fonte);
+				Show show = new Show(data, titolo, img, href, des, fonte, from);
 				listShow.add(show);
 			}
 			page++;
@@ -272,9 +274,9 @@ public class JobConfig extends TelegramLongPollingBot {
 		int page=0;
 		int ti;
 		do {
-			String url = "https://www.ticketmaster.it/api/search/events?q=torino&region=913&sort=date&page=" + page;
-			logger.debug("{}", url);
-			Map<String, Object> jsonToMap = restTemplate.getForObject(url, Map.class);
+			String from = "https://www.ticketmaster.it/api/search/events?q=torino&region=913&sort=date&page=" + page;
+			logger.debug("{}", from);
+			Map<String, Object> jsonToMap = restTemplate.getForObject(from, Map.class);
 			ti = (int) jsonToMap.get("total");
 			List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("events");
 			for (Map<String, Object> map : l) {
@@ -304,7 +306,7 @@ public class JobConfig extends TelegramLongPollingBot {
 					des=map.get("title").toString() + "/" + ((Map)map.get("venue")).get("name").toString(); 
 				}
 				catch (Exception e){};
-				Show show = new Show(data, titolo, img, href, des, fonte);
+				Show show = new Show(data, titolo, img, href, des, fonte, from);
 				listShow.add(show);
 			}
 			page++;
@@ -317,9 +319,9 @@ public class JobConfig extends TelegramLongPollingBot {
 		int page=1;
 		int ti;
 		do {
-			String url = "https://apigatewayb2cstore.vivaticket.com/api/Events/Search/" + page + "/it/it-IT?provinceCode=TO";
-			logger.debug("{}", url);
-			Map<String, Object> jsonToMap = restTemplate.getForObject(url, Map.class);
+			String from = "https://apigatewayb2cstore.vivaticket.com/api/Events/Search/" + page + "/it/it-IT?provinceCode=TO";
+			logger.debug("{}", from);
+			Map<String, Object> jsonToMap = restTemplate.getForObject(from, Map.class);
 			ti = (int) jsonToMap.get("totalItems");
 			List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("items");
 			for (Map<String, Object> map : l) {
@@ -349,7 +351,7 @@ public class JobConfig extends TelegramLongPollingBot {
 				}
 				catch (Exception e){};
 
-				Show show = new Show(data, titolo, img, href, des, fonte);
+				Show show = new Show(data, titolo, img, href, des, fonte, from);
 				listShow.add(show);
 			}
 			page++;
@@ -361,13 +363,13 @@ public class JobConfig extends TelegramLongPollingBot {
 		int showIniziali=listShow.size();
 		String fonte = "Dice";
 		int ti;
-		String url = "https://api.dice.fm/unified_search";
+		String from = "https://api.dice.fm/unified_search";
 		String requestBody = "{\"q\":\"torino\"}";
 		HttpHeaders headers = new HttpHeaders();
 		headers.setContentType(MediaType.APPLICATION_JSON);
 		headers.set("Host", "xx"); // Esempio di header di autorizzazione
 		HttpEntity<String> requestEntity = new HttpEntity<>(requestBody, headers);
-		ResponseEntity<Map> responseEntity = restTemplate.postForEntity(url, requestEntity, Map.class);
+		ResponseEntity<Map> responseEntity = restTemplate.postForEntity(from, requestEntity, Map.class);
 		List<Map> elementi = (List) responseEntity.getBody().get("sections");
 		for (Map map : elementi) {
 			if(map.get("items")!=null) {
@@ -401,7 +403,7 @@ public class JobConfig extends TelegramLongPollingBot {
 					}
 					catch (Exception e){};
 
-					Show show = new Show(data, titolo, img, href, des, fonte); 
+					Show show = new Show(data, titolo, img, href, des, fonte, from); 
 					listShow.add(show);
 
 				}
@@ -416,7 +418,8 @@ public class JobConfig extends TelegramLongPollingBot {
 	private void leggiConcordia() {
 		int showIniziali=listShow.size();
 		String fonte = "CONCORDIA";
-		String response = restTemplate.getForObject("https://www.teatrodellaconcordia.it/programma-prossimi-eventi/", String.class);
+		String from = "https://www.teatrodellaconcordia.it/programma-prossimi-eventi/";
+		String response = restTemplate.getForObject(from, String.class);
 		Document doc = Jsoup.parse(response);
 		Elements select = doc.select(".list-half-item");
 		for (int i=0;i<select.size();i++) {
@@ -448,7 +451,7 @@ public class JobConfig extends TelegramLongPollingBot {
 					des="";
 				}
 				catch (Exception e){};
-				Show show = new Show(data, titolo, img, href, des, fonte);
+				Show show = new Show(data, titolo, img, href, des, fonte, from);
 				listShow.add(show);
 			}
 			catch (Exception e) {
