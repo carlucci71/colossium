@@ -24,6 +24,7 @@ public class Show {
 		this.img = img;
 		this.fonte=fonte;
 		this.href = href;
+		this.from = from;
 	}
 	private String img;
 	private String des;
