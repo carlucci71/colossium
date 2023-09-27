@@ -335,7 +335,7 @@ public class JobConfig extends TelegramLongPollingBot {
 				}
 				catch (Exception e){};
 				try {
-					titolo= map.get("category").toString() + " / " + map.get("title").toString() + " / " + map.get("venueName").toString();
+					titolo= map.get("category").toString() + " / " + map.get("title").toString() + " / " + map.get("venueName").toString() + " (" + map.get("cityName").toString() + ")";
 				}
 				catch (Exception e){};
 				try {
