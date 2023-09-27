@@ -527,6 +527,7 @@ public class JobConfig extends TelegramLongPollingBot {
 
 	private ItemProcessor<Show, Show> processorShow() {
 		return item -> {
+			logger.info(item.getDes());
 			List<Show> resultList = entityManager.createQuery("select n from Show n where titolo = :titolo and fonte = :fonte and des = :des", Show.class)
 					.setParameter("titolo", item.getTitolo())
 					.setParameter("fonte", item.getFonte())
