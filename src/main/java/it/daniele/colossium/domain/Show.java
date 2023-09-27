@@ -2,6 +2,7 @@ package it.daniele.colossium.domain;
 
 import java.time.LocalDateTime;
 
+import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
@@ -29,6 +30,7 @@ public class Show {
 	private String data;
 	private String titolo;
 	private String fonte;
+	@Column(name = "da")
 	private String from;
 	private String href;
 	private LocalDateTime dataConsegna;
