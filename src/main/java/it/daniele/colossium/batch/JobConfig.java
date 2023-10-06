@@ -80,7 +80,8 @@ public class JobConfig extends TelegramLongPollingBot {
 
 	Map<String, Integer> totShow=new HashMap<>();
 
-
+	int contaEventi;
+	
 	@Bean
 	public Job createJob() {
 		return jobBuilderFactory.get("MyJob")
@@ -99,7 +100,7 @@ public class JobConfig extends TelegramLongPollingBot {
 			}
 			public void afterJob(JobExecution jobExecution) {
 				if (jobExecution.getStatus() == BatchStatus.COMPLETED ) {
-					inviaMessaggio(esito + totShow);
+					inviaMessaggio("(" + contaEventi + ") " + esito + totShow);
 					logger.info("COMPLETED: {}", jobExecution);
 				}
 				else if (jobExecution.getStatus() == BatchStatus.FAILED) {
@@ -499,6 +500,7 @@ public class JobConfig extends TelegramLongPollingBot {
 				entityManager.persist(el);
 				inviaMessaggio(el.toString());
 				messaggiInviati++;
+				contaEventi++;
 				if (messaggiInviati==ConstantColossium.MAX_NEWS) {
 					inviaMessaggio("Leggi le NEWS!!!!!!!");
 				}
@@ -544,6 +546,7 @@ public class JobConfig extends TelegramLongPollingBot {
 		return shows -> 
 		shows.forEach(el -> {
 			if (el.getDataConsegna()!=null) {
+				contaEventi++;
 				entityManager.persist(el);
 				sendImageToChat(el.getImg(),el.toString());
 			}
