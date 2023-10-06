@@ -139,6 +139,7 @@ public class JobConfig extends TelegramLongPollingBot {
 					leggiVivaTicket();
 					leggiDice();
 					leggiTicketMaster();
+					leggiMailTicket();
 					cancellaNotificheTelegramScadute();
 					return RepeatStatus.FINISHED;
 				})
@@ -210,6 +211,57 @@ public class JobConfig extends TelegramLongPollingBot {
 		}
 		totShow.put(fonte, listShow.size()-showIniziali);
 	}
+
+	private void leggiMailTicket() {
+		int showIniziali=listShow.size();
+		String fonte = "MAILTICKET";
+		for (int ev=1;ev<=8;ev++) {
+			String from = "https://www.mailticket.it/esplora/" + ev;
+			String response = restTemplate.getForObject(from, String.class);
+			Document doc = Jsoup.parse(response);
+			Elements select = doc.select("li[data-place*=Torino]");
+			for (int i=0;i<select.size();i++) {
+				Element element = select.get(i);
+				try {
+					String data="";
+					String titolo="";
+					String img = ""; 
+					String href = ""; 
+					String des = "";
+
+					try {
+						data = element.select(".day").text() + "/" + element.select(".month").text() + "/" + element.select(".year").text(); 
+					}
+					catch (Exception e){};
+
+					try {
+						titolo = element.select(".info").first().select("p").first().ownText();
+					}
+					catch (Exception e){};
+					try {
+						String tmp=element.select(".evento-search-container").attr("style").replace("background-image: url(//boxfiles.mailticket.it//", "");
+						img =  "https://boxfiles.mailticket.it/" + tmp.substring(0,tmp.indexOf("?")) + "";
+					}
+					catch (Exception e){};
+					try {
+						href = "https://www.mailticket.it/" + element.select(".info").first().select("a").first().attr("href");
+					}
+					catch (Exception e){};
+					try {
+						des = ""; 
+					}
+					catch (Exception e){};
+
+					Show show = new Show(data, titolo, img, href, des, fonte, from);
+					listShow.add(show);
+				}
+				catch (Exception e) {
+				}
+			}
+		}
+		totShow.put(fonte, listShow.size()-showIniziali);
+	}
+
 
 	private void leggiNewsColosseo() {
 		String response = restTemplate.getForObject("https://www.teatrocolosseo.it/News/Default.aspx", String.class);
