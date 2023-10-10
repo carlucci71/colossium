@@ -78,7 +78,6 @@ public class JobConfig extends TelegramLongPollingBot {
 	@Autowired
 	JobBuilderFactory jobBuilderFactory;
 
-	Map<String, Integer> totShow=new HashMap<>();
 
 	int contaEventi;
 	
@@ -100,7 +99,9 @@ public class JobConfig extends TelegramLongPollingBot {
 			}
 			public void afterJob(JobExecution jobExecution) {
 				if (jobExecution.getStatus() == BatchStatus.COMPLETED ) {
-					inviaMessaggio("(" + contaEventi + ") " + esito + totShow);
+					System.out.println(totNewShows);
+					inviaMessaggio("(" + contaEventi + ")\n" + esito + "nuove news: " + messaggiInviati + "\nnuovi show:" + 
+					totNewShows + "\n\nprocessati: " + totShows);
 					logger.info("COMPLETED: {}", jobExecution);
 				}
 				else if (jobExecution.getStatus() == BatchStatus.FAILED) {
@@ -209,7 +210,7 @@ public class JobConfig extends TelegramLongPollingBot {
 			catch (Exception e) {
 			}
 		}
-		totShow.put(fonte, listShow.size()-showIniziali);
+		totShows.put(fonte, listShow.size()-showIniziali);
 	}
 
 	private void leggiMailTicket() {
@@ -259,7 +260,7 @@ public class JobConfig extends TelegramLongPollingBot {
 				}
 			}
 		}
-		totShow.put(fonte, listShow.size()-showIniziali);
+		totShows.put(fonte, listShow.size()-showIniziali);
 	}
 
 
@@ -318,7 +319,7 @@ public class JobConfig extends TelegramLongPollingBot {
 			}
 			page++;
 		} while(page<=tp);
-		totShow.put(fonte, listShow.size()-showIniziali);
+		totShows.put(fonte, listShow.size()-showIniziali);
 	}
 
 	private void leggiTicketMaster() {
@@ -364,7 +365,7 @@ public class JobConfig extends TelegramLongPollingBot {
 			}
 			page++;
 		} while(listShow.size()-showIniziali<ti);
-		totShow.put(fonte, listShow.size()-showIniziali);
+		totShows.put(fonte, listShow.size()-showIniziali);
 	}
 	private void leggiVivaTicket() {
 		int showIniziali=listShow.size();
@@ -396,7 +397,7 @@ public class JobConfig extends TelegramLongPollingBot {
 				}
 				catch (Exception e){};
 				try {
-					href="";
+					href="https://www.vivaticket.com/it/Ticket/" + map.get("slug") + "/" + map.get("id");
 				}
 				catch (Exception e){};
 				try {
@@ -409,7 +410,7 @@ public class JobConfig extends TelegramLongPollingBot {
 			}
 			page++;
 		} while(listShow.size()-showIniziali<ti);
-		totShow.put(fonte, listShow.size()-showIniziali);
+		totShows.put(fonte, listShow.size()-showIniziali);
 	}
 
 	private void leggiDice() {
@@ -463,7 +464,7 @@ public class JobConfig extends TelegramLongPollingBot {
 			};
 		}
 
-		totShow.put(fonte, listShow.size()-showIniziali);
+		totShows.put(fonte, listShow.size()-showIniziali);
 
 	}
 
@@ -510,7 +511,7 @@ public class JobConfig extends TelegramLongPollingBot {
 			catch (Exception e) {
 			}
 		}
-		totShow.put(fonte, listShow.size()-showIniziali);
+		totShows.put(fonte, listShow.size()-showIniziali);
 	}
 
 	private Step stepNews() {
@@ -598,6 +599,13 @@ public class JobConfig extends TelegramLongPollingBot {
 		return shows -> 
 		shows.forEach(el -> {
 			if (el.getDataConsegna()!=null) {
+				String fonte=el.getFonte();
+				Integer tot = totNewShows.get(fonte);
+				if (tot==null) {
+					tot=0;
+				}
+				tot++;
+				totNewShows.put(fonte, tot);
 				contaEventi++;
 				entityManager.persist(el);
 				sendImageToChat(el.getImg(),el.toString());
@@ -702,6 +710,8 @@ public class JobConfig extends TelegramLongPollingBot {
 	public void onUpdateReceived(Update update) {
 	}
 
+	Map<String, Integer> totShows=new HashMap<>();
+	Map<String, Integer> totNewShows=new HashMap<>();
 	int messaggiInviati=0;
 	private List<News> listNews=new ArrayList<>(); 
 	private List<Show> listShow=new ArrayList<>(); 
