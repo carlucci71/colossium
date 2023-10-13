@@ -100,8 +100,12 @@ public class JobConfig extends TelegramLongPollingBot {
 			public void afterJob(JobExecution jobExecution) {
 				if (jobExecution.getStatus() == BatchStatus.COMPLETED ) {
 					System.out.println(totNewShows);
-					inviaMessaggio("(" + contaEventi + ")\n" + esito + "nuove news: " + messaggiInviati + "\nnuovi show:" + 
-					totNewShows + "\n\nprocessati: " + totShows);
+					inviaMessaggio("(" + contaEventi + ")\n" +
+							"nuove news: " + messaggiInviati + "\n" +
+							"nuovi show:" + totNewShows + "\n\n" +
+							esito +
+							"processati: " +
+							totShows);
 					logger.info("COMPLETED: {}", jobExecution);
 				}
 				else if (jobExecution.getStatus() == BatchStatus.FAILED) {
