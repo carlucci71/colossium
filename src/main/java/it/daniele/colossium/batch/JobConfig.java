@@ -554,6 +554,8 @@ public class JobConfig extends TelegramLongPollingBot {
 		return news -> 
 		news.forEach(el -> {
 			if (el.getDataConsegna()!=null && !el.toString().trim().equals("")) {
+				System.out.println(el);
+				System.out.println(el.toString().length());
 				entityManager.persist(el);
 				inviaMessaggio(el.toString());
 				messaggiInviati++;
