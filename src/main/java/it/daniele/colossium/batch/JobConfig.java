@@ -457,6 +457,12 @@ public class JobConfig extends TelegramLongPollingBot {
         List<Map> elementi;
         try {
             ResponseEntity<Map> responseEntity = restTemplate.postForEntity(from, requestEntity, Map.class);
+
+            if (responseEntity.getBody().get("next_page_cursor") !=null){
+                throw new UnsupportedOperationException("Non gestita paginazione con Dice!");
+            }
+
+
             elementi = (List) responseEntity.getBody().get("sections");
         } catch (Exception e){
             throw new RuntimeException("Errore chiamando: [POST]" + from + "/" + requestBody + "\n" + e.getMessage());
