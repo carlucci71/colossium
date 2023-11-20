@@ -1,9 +1,12 @@
 
 package it.daniele.colossium.batch;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import it.daniele.colossium.domain.News;
 import it.daniele.colossium.domain.Show;
 import it.daniele.colossium.domain.TelegramMsg;
+import org.glassfish.jersey.internal.util.collection.Values;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -50,9 +53,12 @@ import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 
 @SuppressWarnings("deprecation")
@@ -135,6 +141,7 @@ public class JobConfig extends TelegramLongPollingBot {
     private Step stepInit() {
         return stepBuilderFactory.get("stepInit")
                 .tasklet((contribution, chunkContext) -> {
+                    leggiEneba();
                     leggiNewsColosseo();
                     leggiShowColosseo();
                     leggiTicketOne();
@@ -290,6 +297,70 @@ public class JobConfig extends TelegramLongPollingBot {
             String textTitolo = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblTitolo]").text();
             News news = new News(textData, textTitolo, textDes);
             listNews.add(news);
+        }
+    }
+
+    private void leggiEneba() {
+        int showIniziali = listShow.size();
+        String fonte = "Eneba";
+        Map<String, Object> product;
+        int pagina=1;
+        List<Map<String, Object>> ret=new ArrayList<>();
+        do {
+            String from = "https://www.eneba.com/it/store/psn?drms[]=psn&page=" + pagina + "&regions[]=italy&types[]=subscription&types[]=giftcard";
+            pagina++;
+            String response;
+            try {
+                response = restTemplate.getForObject(from, String.class);
+            } catch (Exception e) {
+                throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
+            }
+            Document doc = Jsoup.parse(response);
+            String json = response.substring(response.indexOf("ROOT_QUERY") - 2);
+            json = json.substring(0, json.indexOf("</script>"));
+//            System.out.println(json);
+            Map<String, Object> map = jsonToMap(json);
+//            System.out.println(map);
+            product =
+                    map.entrySet()
+                            .stream()
+                            .filter(x -> x.getKey().startsWith("Product::"))
+                            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            product.forEach((k,v)-> {
+                Map r=new HashMap();
+                Map val=(Map) v;
+                Map m;
+                r.put("name",val.get("name"));
+                m = (Map)val.get("description");
+                r.put("des",m.get("title"));
+                m = (Map)val.get("cover({\"size\":300})");
+                r.put("img",m.get("src"));
+                m = (Map)val.get("cheapestAuction");
+                if (m!=null){
+                    Map au= (Map) map.get(m.get("__ref"));
+                    Map pr = (Map) au.get("price({\"currency\":\"EUR\"})");
+                    Integer amount = (Integer) pr.get("amount");
+                    r.put("price",amount/100d);
+                    ret.add(r);
+                }
+            });
+        }while (product.size()>0);
+        for (Map<String, Object> map : ret) {
+            Show show = new Show("", map.get("name").toString(), map.get("img").toString(), null, null, fonte, map.get("des").toString() + " --> " + map.get("price").toString());
+            listShow.add(show);
+        }
+        totShows.put(fonte, listShow.size() - showIniziali);
+    }
+    private ObjectMapper mapper = new ObjectMapper();
+
+    public Map<String, Object> jsonToMap(String json)
+    {
+        try
+        {
+            return mapper.readValue(json, new TypeReference<Map<String, Object>>(){});
+        } catch (Exception e)
+        {
+            throw new RuntimeException(e);
         }
     }
 
