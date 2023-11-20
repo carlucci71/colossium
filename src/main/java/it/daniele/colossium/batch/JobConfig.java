@@ -346,7 +346,7 @@ public class JobConfig extends TelegramLongPollingBot {
             });
         }while (product.size()>0);
         for (Map<String, Object> map : ret) {
-            Show show = new Show("", map.get("name").toString(), map.get("img").toString(), null, null, fonte, map.get("des").toString() + " --> " + map.get("price").toString());
+            Show show = new Show("", map.get("name").toString(), map.get("img").toString(), null, map.get("des").toString(), fonte, map.get("des").toString() + " --> " + map.get("price").toString());
             listShow.add(show);
         }
         totShows.put(fonte, listShow.size() - showIniziali);
