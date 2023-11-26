@@ -107,7 +107,7 @@ public class JobConfig extends TelegramLongPollingBot {
             }
 
             public void afterJob(JobExecution jobExecution) {
-                if (jobExecution.getStatus() == BatchStatus.COMPLETED) {
+                if (jobExecution.getStatus() == BatchStatus.COMPLETED && tipoElaborazione== TIPI_ELAB.ALL) {
                     logger.info(totNewShows.toString());
                     inviaMessaggio("(" + contaEventi + ")\n" +
                             "nuove news: " + messaggiInviati + "\n" +
