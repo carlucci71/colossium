@@ -103,7 +103,7 @@ public class JobConfig extends TelegramLongPollingBot {
         return new JobExecutionListener() {
             public void beforeJob(JobExecution jobExecution) {
                 tipoElaborazione = TIPI_ELAB.valueOf(jobExecution.getJobParameters().getString("tipoElaborazione"));
-                logger.debug("Called beforeJob");
+                logger.debug("Called beforeJob: " + tipoElaborazione);
             }
 
             public void afterJob(JobExecution jobExecution) {
