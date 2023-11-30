@@ -322,7 +322,7 @@ public class JobConfig extends TelegramLongPollingBot {
                 Map<String, Object> map;
                 String from = "https://www.eneba.com/it/store/psn?drms[]=psn&page=" + pagina + "&regions[]=italy&types[]=subscription&types[]=giftcard";
                 pagina++;
-                String response;
+                String response="";
                 try {
                     response = restTemplate.getForObject(from, String.class);
                     Document doc = Jsoup.parse(response);
@@ -330,6 +330,7 @@ public class JobConfig extends TelegramLongPollingBot {
                     json = json.substring(0, json.indexOf("</script>"));
                     map = jsonToMap(json);
                 } catch (Exception e) {
+                    System.out.println(response);
                     throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
                 }
 //            System.out.println(json);
