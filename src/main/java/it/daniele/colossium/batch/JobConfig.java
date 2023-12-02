@@ -95,7 +95,9 @@ public class JobConfig extends TelegramLongPollingBot {
                 .build();
     }
 
-    enum TIPI_ELAB {NEWS_COLOSSEO, SHOW_COLOSSEO, ENEBA, TICKET_ONE, CONCORDIA, VIVATICKET, DICE, TICKET_MASTER, MAIL_TICKET, ALL};
+    enum TIPI_ELAB {NEWS_COLOSSEO, SHOW_COLOSSEO, ENEBA, TICKET_ONE, CONCORDIA, VIVATICKET, DICE, TICKET_MASTER, MAIL_TICKET, ALL}
+
+    ;
     TIPI_ELAB tipoElaborazione;
 
 
@@ -107,14 +109,15 @@ public class JobConfig extends TelegramLongPollingBot {
             }
 
             public void afterJob(JobExecution jobExecution) {
-                if (jobExecution.getStatus() == BatchStatus.COMPLETED && tipoElaborazione== TIPI_ELAB.ALL) {
+                if (jobExecution.getStatus() == BatchStatus.COMPLETED && tipoElaborazione == TIPI_ELAB.ALL) {
                     logger.info(totNewShows.toString());
                     inviaMessaggio("(" + contaEventi + ")\n" +
                             "nuove news: " + messaggiInviati + "\n" +
-                            "nuovi show:" + totNewShows + "\n\n" +
+                            "nuovi show:" + totNewShows +
+                            "skipped: " + skipped  + "\n\n" +
                             esito +
-                            "processati: " +
-                            totShows);
+                            "processati: " + totShows
+                    );
                     logger.info("COMPLETED: {}", jobExecution);
                 } else if (jobExecution.getStatus() == BatchStatus.FAILED) {
                     inviaMessaggio("ERRORE" + jobExecution.getAllFailureExceptions());
@@ -181,67 +184,11 @@ public class JobConfig extends TelegramLongPollingBot {
     }
 
     private void leggiShowColosseo() {
-        if (tipoElaborazione==TIPI_ELAB.ALL || tipoElaborazione==TIPI_ELAB.SHOW_COLOSSEO) {
-            int showIniziali = listShow.size();
-            String fonte = "COLOSSEO";
-            String from = "https://www.teatrocolosseo.it/Stagione.aspx";
-            String response;
-            try {
-                response = restTemplate.getForObject(from, String.class);
-            } catch (Exception e) {
-                throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
-            }
-            Document doc = Jsoup.parse(response);
-            Elements select = doc.select(".boxspet");
-            for (int i = 0; i < select.size(); i++) {
-                Element element = select.get(i);
-                try {
-                    String id = element.select(".spett-box-image").first().attr("id").replace("_imageBox", "");
-                    String data = "";
-                    String titolo = "";
-                    String img = "";
-                    String href = "";
-                    String des = "";
-
-                    try {
-                        data = doc.select("span[id*=" + id + "_lblDataIntro]").text();
-                    } catch (Exception e) {
-                    }
-
-                    try {
-                        titolo = doc.select("#" + id + "_divOverlay1 strong").first().text();
-                    } catch (Exception e) {
-                    }
-
-                    try {
-                        img = "https://www.teatrocolosseo.it/" + element.select(".spett-box-image").first().attr("data-source");
-                    } catch (Exception e) {
-                    }
-
-                    try {
-                        href = "https://www.teatrocolosseo.it/" + doc.select("a[id*=" + id + "_hlVisualizza]").first().attr("href");
-                    } catch (Exception e) {
-                    }
-
-                    try {
-                        des = "";
-                    } catch (Exception e) {
-                    }
-                    Show show = new Show(data, titolo, img, href, des, fonte, from);
-                    listShow.add(show);
-                } catch (Exception e) {
-                }
-            }
-            totShows.put(fonte, listShow.size() - showIniziali);
-        }
-    }
-
-    private void leggiMailTicket() {
-        if (tipoElaborazione==TIPI_ELAB.ALL || tipoElaborazione==TIPI_ELAB.MAIL_TICKET) {
-            int showIniziali = listShow.size();
-            String fonte = "MAILTICKET";
-            for (int ev = 1; ev <= 8; ev++) {
-                String from = "https://www.mailticket.it/esplora/" + ev;
+        String fonte = "COLOSSEO";
+        try {
+            if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.SHOW_COLOSSEO) {
+                int showIniziali = listShow.size();
+                String from = "https://www.teatrocolosseo.it/Stagione.aspx";
                 String response;
                 try {
                     response = restTemplate.getForObject(from, String.class);
@@ -249,7 +196,469 @@ public class JobConfig extends TelegramLongPollingBot {
                     throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
                 }
                 Document doc = Jsoup.parse(response);
-                Elements select = doc.select("li[data-place*=Torino]");
+                Elements select = doc.select(".boxspet");
+                for (int i = 0; i < select.size(); i++) {
+                    Element element = select.get(i);
+                    try {
+                        String id = element.select(".spett-box-image").first().attr("id").replace("_imageBox", "");
+                        String data = "";
+                        String titolo = "";
+                        String img = "";
+                        String href = "";
+                        String des = "";
+
+                        try {
+                            data = doc.select("span[id*=" + id + "_lblDataIntro]").text();
+                        } catch (Exception e) {
+                        }
+
+                        try {
+                            titolo = doc.select("#" + id + "_divOverlay1 strong").first().text();
+                        } catch (Exception e) {
+                        }
+
+                        try {
+                            img = "https://www.teatrocolosseo.it/" + element.select(".spett-box-image").first().attr("data-source");
+                        } catch (Exception e) {
+                        }
+
+                        try {
+                            href = "https://www.teatrocolosseo.it/" + doc.select("a[id*=" + id + "_hlVisualizza]").first().attr("href");
+                        } catch (Exception e) {
+                        }
+
+                        try {
+                            des = "";
+                        } catch (Exception e) {
+                        }
+                        Show show = new Show(data, titolo, img, href, des, fonte, from);
+                        listShow.add(show);
+                    } catch (Exception e) {
+                    }
+                }
+                totShows.put(fonte, listShow.size() - showIniziali);
+            }
+        } catch (RuntimeException e) {
+            logger.error(e.getMessage(), e);
+            skipped.add(fonte);
+        }
+    }
+
+    private void leggiMailTicket() {
+        String fonte = "MAILTICKET";
+        try {
+            if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.MAIL_TICKET) {
+                int showIniziali = listShow.size();
+                for (int ev = 1; ev <= 8; ev++) {
+                    String from = "https://www.mailticket.it/esplora/" + ev;
+                    String response;
+                    try {
+                        response = restTemplate.getForObject(from, String.class);
+                    } catch (Exception e) {
+                        throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
+                    }
+                    Document doc = Jsoup.parse(response);
+                    Elements select = doc.select("li[data-place*=Torino]");
+                    for (int i = 0; i < select.size(); i++) {
+                        Element element = select.get(i);
+                        try {
+                            String data = "";
+                            String titolo = "";
+                            String img = "";
+                            String href = "";
+                            String des = "";
+
+                            try {
+                                data = element.select(".day").text() + "/" + element.select(".month").text() + "/" + element.select(".year").text();
+                            } catch (Exception e) {
+                            }
+                            try {
+                                titolo = element.select(".info").first().select("p").first().ownText();
+                            } catch (Exception e) {
+                            }
+                            try {
+                                String tmp = element.select(".evento-search-container").attr("style").replace("background-image: url(//boxfiles.mailticket.it//", "");
+                                img = "https://boxfiles.mailticket.it/" + tmp.substring(0, tmp.indexOf("?")) + "";
+                            } catch (Exception e) {
+                            }
+                            try {
+                                href = "https://www.mailticket.it/" + element.select(".info").first().select("a").first().attr("href");
+                            } catch (Exception e) {
+                            }
+                            try {
+                                des = "";
+                            } catch (Exception e) {
+                            }
+                            Show show = new Show(data, titolo, img, href, des, fonte, from);
+                            listShow.add(show);
+                        } catch (Exception e) {
+                        }
+                    }
+                }
+                totShows.put(fonte, listShow.size() - showIniziali);
+            }
+        } catch (RuntimeException e) {
+            logger.error(e.getMessage(), e);
+            skipped.add(fonte);
+        }
+    }
+
+
+    private void leggiNewsColosseo() {
+        String fonte = "NEWS_COLOSSEO";
+        try {
+            if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.NEWS_COLOSSEO) {
+                String from = "https://www.teatrocolosseo.it/News/Default.aspx";
+                String response;
+                try {
+                    response = restTemplate.getForObject(from, String.class);
+                } catch (Exception e) {
+                    throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
+                }
+                Document doc = Jsoup.parse(response);
+                for (int i = 0; i < ConstantColossium.MAX_NEWS; i++) {
+                    String textDes = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblDescrizione1]").text();
+                    String textData = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblData]").text();
+                    String textTitolo = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblTitolo]").text();
+                    News news = new News(textData, textTitolo, textDes);
+                    listNews.add(news);
+                }
+            }
+        } catch (RuntimeException e) {
+            logger.error(e.getMessage(), e);
+            skipped.add(fonte);
+        }
+    }
+
+    private void leggiEneba() {
+        String fonte = "Eneba";
+        try {
+            if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.ENEBA) {
+                int showIniziali = listShow.size();
+                Map<String, Object> product;
+                int pagina = 1;
+                List<Map<String, Object>> ret = new ArrayList<>();
+                do {
+                    Map<String, Object> map;
+                    String from = "https://www.eneba.com/it/store/psn?drms[]=psn&page=" + pagina + "&regions[]=italy&types[]=subscription&types[]=giftcard";
+                    System.out.println(from);
+                    pagina++;
+                    String response = "";
+                    try {
+                        response = restTemplate.getForObject(from, String.class);
+                        Document doc = Jsoup.parse(response);
+                        String json = response.substring(response.indexOf("ROOT_QUERY") - 2);
+                        json = json.substring(0, json.indexOf("</script>"));
+                        map = jsonToMap(json);
+                    } catch (Exception e) {
+                        System.out.println(response);
+                        throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
+                    }
+//            System.out.println(json);
+//            System.out.println(map);
+                    product =
+                            map.entrySet()
+                                    .stream()
+                                    .filter(x -> x.getKey().startsWith("Product::"))
+                                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+                    product.forEach((k, v) -> {
+                        Map r = new HashMap();
+                        Map val = (Map) v;
+                        Map m;
+                        r.put("name", val.get("name"));
+                        m = (Map) val.get("description");
+                        r.put("des", m.get("title"));
+                        m = (Map) val.get("cover({\"size\":300})");
+                        r.put("img", m.get("src"));
+                        m = (Map) val.get("cheapestAuction");
+                        if (m != null) {
+                            Map au = (Map) map.get(m.get("__ref"));
+                            Map pr = (Map) au.get("price({\"currency\":\"EUR\"})");
+                            Integer amount = (Integer) pr.get("amount");
+                            r.put("price", amount / 100d);
+                            ret.add(r);
+                        }
+                    });
+                } while (product.size() > 0);
+                for (Map<String, Object> map : ret) {
+                    Show show = new Show("", map.get("name").toString(), map.get("img").toString(), null, map.get("des").toString(), fonte, map.get("des").toString() + " --> " + map.get("price").toString());
+                    listShow.add(show);
+                }
+                totShows.put(fonte, listShow.size() - showIniziali);
+            }
+        } catch (RuntimeException e) {
+            logger.error(e.getMessage(), e);
+            skipped.add(fonte);
+        }
+    }
+
+    private ObjectMapper mapper = new ObjectMapper();
+
+    public Map<String, Object> jsonToMap(String json) {
+        try {
+            return mapper.readValue(json, new TypeReference<Map<String, Object>>() {
+            });
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void leggiTicketOne() {
+        String fonte = "TicketOne";
+        try {
+            if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.TICKET_ONE) {
+                int showIniziali = listShow.size();
+                int page = 1;
+                int tp;
+                do {
+                    String from = "https://public-api.eventim.com/websearch/search/api/exploration/v2/productGroups?webId=web__ticketone-it&language=it&page="
+                            + page + "&city_ids=217&city_ids=null";
+                    Map<String, Object> jsonToMap;
+                    try {
+                        jsonToMap = restTemplate.getForObject(from, Map.class);
+                    } catch (Exception e) {
+                        throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
+                    }
+                    tp = (int) jsonToMap.get("totalPages");
+                    List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("productGroups");
+                    for (Map<String, Object> map : l) {
+                        String data = "";
+                        String titolo = "";
+                        String img = "";
+                        String href = "";
+                        String des = "";
+
+                        try {
+                            data = map.get("startDate").toString();
+                        } catch (Exception e) {
+                        }
+                        try {
+                            titolo = map.get("name").toString();
+                        } catch (Exception e) {
+                        }
+                        try {
+                            img = (map.get("imageUrl") != null ? map.get("imageUrl").toString() : "");
+                        } catch (Exception e) {
+                        }
+                        try {
+                            href = map.get("link").toString();
+                        } catch (Exception e) {
+                        }
+                        try {
+                            des = (map.get("description") != null ? map.get("description").toString() : "");
+                        } catch (Exception e) {
+                        }
+                        Show show = new Show(data, titolo, img, href, des, fonte, from);
+                        listShow.add(show);
+                    }
+                    page++;
+                } while (page <= tp);
+                totShows.put(fonte, listShow.size() - showIniziali);
+            }
+        } catch (RuntimeException e) {
+            logger.error(e.getMessage(), e);
+            skipped.add(fonte);
+        }
+    }
+
+    private void leggiTicketMaster() {
+        String fonte = "TicketMaster";
+        try {
+            if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.TICKET_MASTER) {
+                int showIniziali = listShow.size();
+                int page = 0;
+                int ti;
+                do {
+                    String from = "https://www.ticketmaster.it/api/search/events?q=torino&region=913&sort=date&page=" + page;
+                    logger.debug("{}", from);
+                    Map<String, Object> jsonToMap;
+                    try {
+                        jsonToMap = restTemplate.getForObject(from, Map.class);
+                    } catch (Exception e) {
+                        throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
+                    }
+                    ti = (int) jsonToMap.get("total");
+                    List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("events");
+                    for (Map<String, Object> map : l) {
+                        String data = "";
+                        String titolo = "";
+                        String img = "";
+                        String href = "";
+                        String des = "";
+                        try {
+                            data = ((Map) map.get("dates")).get("startDate").toString();
+                        } catch (Exception e) {
+                        }
+                        try {
+                            titolo = map.get("title").toString();
+                        } catch (Exception e) {
+                        }
+                        try {
+                            img = "http:" + map.get("imageUrl").toString();
+                        } catch (Exception e) {
+                        }
+                        try {
+                            href = map.get("url").toString();
+                        } catch (Exception e) {
+                        }
+                        try {
+                            des = map.get("title").toString() + "/" + ((Map) map.get("venue")).get("name").toString();
+                        } catch (Exception e) {
+                        }
+                        Show show = new Show(data, titolo, img, href, des, fonte, from);
+                        listShow.add(show);
+                    }
+                    page++;
+                } while (listShow.size() - showIniziali < ti);
+                totShows.put(fonte, listShow.size() - showIniziali);
+            }
+        } catch (RuntimeException e) {
+            logger.error(e.getMessage(), e);
+            skipped.add(fonte);
+        }
+    }
+
+    private void leggiVivaTicket() {
+        String fonte = "VivaTicket";
+        try {
+            if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.VIVATICKET) {
+                int showIniziali = listShow.size();
+                int page = 1;
+                int ti;
+                do {
+                    String from = "https://apigatewayb2cstore.vivaticket.com/api/Events/Search/" + page + "/it/it-IT?provinceCode=TO";
+                    logger.debug("{}", from);
+                    Map<String, Object> jsonToMap;
+                    try {
+                        jsonToMap = restTemplate.getForObject(from, Map.class);
+                    } catch (Exception e) {
+                        throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
+                    }
+                    ti = (int) jsonToMap.get("totalItems");
+                    List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("items");
+                    for (Map<String, Object> map : l) {
+                        String data = "";
+                        String titolo = "";
+                        String img = "";
+                        String href = "";
+                        String des = "";
+                        try {
+                            data = map.get("startDate") == null ? "-" : map.get("startDate").toString();
+                        } catch (Exception e) {
+                        }
+                        try {
+                            titolo = map.get("category").toString() + " / " + map.get("title").toString() + " / " + map.get("venueName").toString() + " (" + map.get("cityName").toString() + ")";
+                        } catch (Exception e) {
+                        }
+                        try {
+                            img = map.get("image").toString();
+                        } catch (Exception e) {
+                        }
+                        try {
+                            href = "https://www.vivaticket.com/it/Ticket/" + map.get("slug") + "/" + map.get("id");
+                        } catch (Exception e) {
+                        }
+                        try {
+                            des = map.get("title").toString();
+                        } catch (Exception e) {
+                        }
+                        Show show = new Show(data, titolo, img, href, des, fonte, from);
+                        listShow.add(show);
+                    }
+                    page++;
+                } while (listShow.size() - showIniziali < ti);
+                totShows.put(fonte, listShow.size() - showIniziali);
+            }
+        } catch (RuntimeException e) {
+            logger.error(e.getMessage(), e);
+            skipped.add(fonte);
+        }
+    }
+
+    private void leggiDice() {
+        String fonte = "Dice";
+        try {
+            if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.DICE) {
+                int showIniziali = listShow.size();
+                int ti;
+                String from = "https://api.dice.fm/unified_search";
+                String requestBody = "{\"q\":\"torino\"}";
+                HttpHeaders headers = new HttpHeaders();
+                headers.setContentType(MediaType.APPLICATION_JSON);
+                headers.set("Host", "xx"); // Esempio di header di autorizzazione
+                HttpEntity<String> requestEntity = new HttpEntity<>(requestBody, headers);
+                List<Map> elementi;
+                try {
+                    ResponseEntity<Map> responseEntity = restTemplate.postForEntity(from, requestEntity, Map.class);
+
+                    if (responseEntity.getBody().get("next_page_cursor") != null) {
+                        throw new UnsupportedOperationException("Non gestita paginazione con Dice!");
+                    }
+
+
+                    elementi = (List) responseEntity.getBody().get("sections");
+                } catch (Exception e) {
+                    throw new RuntimeException("Errore chiamando: [POST]" + from + "/" + requestBody + "\n" + e.getMessage());
+                }
+                for (Map map : elementi) {
+                    if (map.get("items") != null) {
+                        List<Map> items = (List) map.get("items");
+                        for (Map item : items) {
+                            Map single = (Map) item.get("event");
+
+                            String data = "";
+                            String titolo = "";
+                            String img = "";
+                            String href = "";
+                            String des = "";
+                            try {
+                                data = ((Map) ((Map) single).get("dates")).get("event_start_date").toString();
+                            } catch (Exception e) {
+                            }
+                            try {
+                                titolo = single.get("name").toString() + " - " + ((List<Map>) single.get("venues")).get(0).get("name").toString();//name + address;
+                            } catch (Exception e) {
+                            }
+                            try {
+                                img = ((Map) ((Map) single).get("images")).get("square").toString();
+                            } catch (Exception e) {
+                            }
+                            try {
+                                href = ((Map) ((Map) single).get("social_links")).get("event_share").toString();
+                            } catch (Exception e) {
+                            }
+                            try {
+                                des = ((Map) ((Map) single).get("about")).get("description").toString();
+                            } catch (Exception e) {
+                            }
+                            Show show = new Show(data, titolo, img, href, des, fonte, from);
+                            listShow.add(show);
+                        }
+                    }
+                }
+                totShows.put(fonte, listShow.size() - showIniziali);
+            }
+        } catch (RuntimeException e) {
+            logger.error(e.getMessage(), e);
+            skipped.add(fonte);
+        }
+    }
+
+
+    private void leggiConcordia() {
+        String fonte = "CONCORDIA";
+        try {
+            if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.CONCORDIA) {
+                int showIniziali = listShow.size();
+                String from = "https://www.teatrodellaconcordia.it/programma-prossimi-eventi/";
+                String response;
+                try {
+                    response = restTemplate.getForObject(from, String.class);
+                } catch (Exception e) {
+                    throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
+                }
+                Document doc = Jsoup.parse(response);
+                Elements select = doc.select(".list-half-item");
                 for (int i = 0; i < select.size(); i++) {
                     Element element = select.get(i);
                     try {
@@ -258,22 +667,20 @@ public class JobConfig extends TelegramLongPollingBot {
                         String img = "";
                         String href = "";
                         String des = "";
-
                         try {
-                            data = element.select(".day").text() + "/" + element.select(".month").text() + "/" + element.select(".year").text();
+                            data = element.select(".event-date").first().text();
                         } catch (Exception e) {
                         }
                         try {
-                            titolo = element.select(".info").first().select("p").first().ownText();
+                            titolo = element.select(".event-title").first().text();
                         } catch (Exception e) {
                         }
                         try {
-                            String tmp = element.select(".evento-search-container").attr("style").replace("background-image: url(//boxfiles.mailticket.it//", "");
-                            img = "https://boxfiles.mailticket.it/" + tmp.substring(0, tmp.indexOf("?")) + "";
+                            img = element.select(".list-half-image").first().attr("style").replace("background-image:url(", "").replace(")", "");
                         } catch (Exception e) {
                         }
                         try {
-                            href = "https://www.mailticket.it/" + element.select(".info").first().select("a").first().attr("href");
+                            href = element.select(".list-half-item").first().attr("onclick").replace("window.location='", "").replace("';", "");
                         } catch (Exception e) {
                         }
                         try {
@@ -285,369 +692,11 @@ public class JobConfig extends TelegramLongPollingBot {
                     } catch (Exception e) {
                     }
                 }
+                totShows.put(fonte, listShow.size() - showIniziali);
             }
-            totShows.put(fonte, listShow.size() - showIniziali);
-        }
-    }
-
-
-    private void leggiNewsColosseo() {
-        if (tipoElaborazione==TIPI_ELAB.ALL || tipoElaborazione==TIPI_ELAB.NEWS_COLOSSEO) {
-            String from = "https://www.teatrocolosseo.it/News/Default.aspx";
-            String response;
-            try {
-                response = restTemplate.getForObject(from, String.class);
-            } catch (Exception e) {
-                throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
-            }
-            Document doc = Jsoup.parse(response);
-            for (int i = 0; i < ConstantColossium.MAX_NEWS; i++) {
-                String textDes = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblDescrizione1]").text();
-                String textData = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblData]").text();
-                String textTitolo = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblTitolo]").text();
-                News news = new News(textData, textTitolo, textDes);
-                listNews.add(news);
-            }
-        }
-    }
-
-    private void leggiEneba() {
-        if (tipoElaborazione==TIPI_ELAB.ALL || tipoElaborazione==TIPI_ELAB.ENEBA) {
-            int showIniziali = listShow.size();
-            String fonte = "Eneba";
-            Map<String, Object> product;
-            int pagina = 1;
-            List<Map<String, Object>> ret = new ArrayList<>();
-            do {
-                Map<String, Object> map;
-                String from = "https://www.eneba.com/it/store/psn?drms[]=psn&page=" + pagina + "&regions[]=italy&types[]=subscription&types[]=giftcard";
-                pagina++;
-                String response="";
-                try {
-                    response = restTemplate.getForObject(from, String.class);
-                    Document doc = Jsoup.parse(response);
-                    String json = response.substring(response.indexOf("ROOT_QUERY") - 2);
-                    json = json.substring(0, json.indexOf("</script>"));
-                    map = jsonToMap(json);
-                } catch (Exception e) {
-                    System.out.println(response);
-                    throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
-                }
-//            System.out.println(json);
-//            System.out.println(map);
-                product =
-                        map.entrySet()
-                                .stream()
-                                .filter(x -> x.getKey().startsWith("Product::"))
-                                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-                product.forEach((k, v) -> {
-                    Map r = new HashMap();
-                    Map val = (Map) v;
-                    Map m;
-                    r.put("name", val.get("name"));
-                    m = (Map) val.get("description");
-                    r.put("des", m.get("title"));
-                    m = (Map) val.get("cover({\"size\":300})");
-                    r.put("img", m.get("src"));
-                    m = (Map) val.get("cheapestAuction");
-                    if (m != null) {
-                        Map au = (Map) map.get(m.get("__ref"));
-                        Map pr = (Map) au.get("price({\"currency\":\"EUR\"})");
-                        Integer amount = (Integer) pr.get("amount");
-                        r.put("price", amount / 100d);
-                        ret.add(r);
-                    }
-                });
-            } while (product.size() > 0);
-            for (Map<String, Object> map : ret) {
-                Show show = new Show("", map.get("name").toString(), map.get("img").toString(), null, map.get("des").toString(), fonte, map.get("des").toString() + " --> " + map.get("price").toString());
-                listShow.add(show);
-            }
-            totShows.put(fonte, listShow.size() - showIniziali);
-        }
-    }
-    private ObjectMapper mapper = new ObjectMapper();
-
-    public Map<String, Object> jsonToMap(String json)
-    {
-        try
-        {
-            return mapper.readValue(json, new TypeReference<Map<String, Object>>(){});
-        } catch (Exception e)
-        {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private void leggiTicketOne() {
-        if (tipoElaborazione==TIPI_ELAB.ALL || tipoElaborazione==TIPI_ELAB.TICKET_ONE) {
-            int showIniziali = listShow.size();
-            String fonte = "TicketOne";
-            int page = 1;
-            int tp;
-            do {
-                String from = "https://public-api.eventim.com/websearch/search/api/exploration/v2/productGroups?webId=web__ticketone-it&language=it&page="
-                        + page + "&city_ids=217&city_ids=null";
-                Map<String, Object> jsonToMap;
-                try {
-                    jsonToMap = restTemplate.getForObject(from, Map.class);
-                } catch (Exception e) {
-                    throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
-                }
-                tp = (int) jsonToMap.get("totalPages");
-                List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("productGroups");
-                for (Map<String, Object> map : l) {
-                    String data = "";
-                    String titolo = "";
-                    String img = "";
-                    String href = "";
-                    String des = "";
-
-                    try {
-                        data = map.get("startDate").toString();
-                    } catch (Exception e) {
-                    }
-                    try {
-                        titolo = map.get("name").toString();
-                    } catch (Exception e) {
-                    }
-                    try {
-                        img = (map.get("imageUrl") != null ? map.get("imageUrl").toString() : "");
-                    } catch (Exception e) {
-                    }
-                    try {
-                        href = map.get("link").toString();
-                    } catch (Exception e) {
-                    }
-                    try {
-                        des = (map.get("description") != null ? map.get("description").toString() : "");
-                    } catch (Exception e) {
-                    }
-                    Show show = new Show(data, titolo, img, href, des, fonte, from);
-                    listShow.add(show);
-                }
-                page++;
-            } while (page <= tp);
-            totShows.put(fonte, listShow.size() - showIniziali);
-        }
-    }
-
-    private void leggiTicketMaster() {
-        if (tipoElaborazione==TIPI_ELAB.ALL || tipoElaborazione==TIPI_ELAB.TICKET_MASTER) {
-            int showIniziali = listShow.size();
-            String fonte = "TicketMaster";
-            int page = 0;
-            int ti;
-            do {
-                String from = "https://www.ticketmaster.it/api/search/events?q=torino&region=913&sort=date&page=" + page;
-                logger.debug("{}", from);
-                Map<String, Object> jsonToMap;
-                try {
-                    jsonToMap = restTemplate.getForObject(from, Map.class);
-                } catch (Exception e) {
-                    throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
-                }
-                ti = (int) jsonToMap.get("total");
-                List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("events");
-                for (Map<String, Object> map : l) {
-                    String data = "";
-                    String titolo = "";
-                    String img = "";
-                    String href = "";
-                    String des = "";
-                    try {
-                        data = ((Map) map.get("dates")).get("startDate").toString();
-                    } catch (Exception e) {
-                    }
-                    try {
-                        titolo = map.get("title").toString();
-                    } catch (Exception e) {
-                    }
-                    try {
-                        img = "http:" + map.get("imageUrl").toString();
-                    } catch (Exception e) {
-                    }
-                    try {
-                        href = map.get("url").toString();
-                    } catch (Exception e) {
-                    }
-                    try {
-                        des = map.get("title").toString() + "/" + ((Map) map.get("venue")).get("name").toString();
-                    } catch (Exception e) {
-                    }
-                    Show show = new Show(data, titolo, img, href, des, fonte, from);
-                    listShow.add(show);
-                }
-                page++;
-            } while (listShow.size() - showIniziali < ti);
-            totShows.put(fonte, listShow.size() - showIniziali);
-        }
-    }
-
-    private void leggiVivaTicket() {
-        if (tipoElaborazione==TIPI_ELAB.ALL || tipoElaborazione==TIPI_ELAB.VIVATICKET) {
-            int showIniziali = listShow.size();
-            String fonte = "VivaTicket";
-            int page = 1;
-            int ti;
-            do {
-                String from = "https://apigatewayb2cstore.vivaticket.com/api/Events/Search/" + page + "/it/it-IT?provinceCode=TO";
-                logger.debug("{}", from);
-                Map<String, Object> jsonToMap;
-                try {
-                    jsonToMap = restTemplate.getForObject(from, Map.class);
-                } catch (Exception e) {
-                    throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
-                }
-                ti = (int) jsonToMap.get("totalItems");
-                List<Map<String, Object>> l = (List<Map<String, Object>>) jsonToMap.get("items");
-                for (Map<String, Object> map : l) {
-                    String data = "";
-                    String titolo = "";
-                    String img = "";
-                    String href = "";
-                    String des = "";
-                    try {
-                        data = map.get("startDate") == null ? "-" : map.get("startDate").toString();
-                    } catch (Exception e) {
-                    }
-                    try {
-                        titolo = map.get("category").toString() + " / " + map.get("title").toString() + " / " + map.get("venueName").toString() + " (" + map.get("cityName").toString() + ")";
-                    } catch (Exception e) {
-                    }
-                    try {
-                        img = map.get("image").toString();
-                    } catch (Exception e) {
-                    }
-                    try {
-                        href = "https://www.vivaticket.com/it/Ticket/" + map.get("slug") + "/" + map.get("id");
-                    } catch (Exception e) {
-                    }
-                    try {
-                        des = map.get("title").toString();
-                    } catch (Exception e) {
-                    }
-                    Show show = new Show(data, titolo, img, href, des, fonte, from);
-                    listShow.add(show);
-                }
-                page++;
-            } while (listShow.size() - showIniziali < ti);
-            totShows.put(fonte, listShow.size() - showIniziali);
-        }
-    }
-
-    private void leggiDice() {
-        if (tipoElaborazione==TIPI_ELAB.ALL || tipoElaborazione==TIPI_ELAB.DICE) {
-            int showIniziali = listShow.size();
-            String fonte = "Dice";
-            int ti;
-            String from = "https://api.dice.fm/unified_search";
-            String requestBody = "{\"q\":\"torino\"}";
-            HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_JSON);
-            headers.set("Host", "xx"); // Esempio di header di autorizzazione
-            HttpEntity<String> requestEntity = new HttpEntity<>(requestBody, headers);
-            List<Map> elementi;
-            try {
-                ResponseEntity<Map> responseEntity = restTemplate.postForEntity(from, requestEntity, Map.class);
-
-                if (responseEntity.getBody().get("next_page_cursor") != null) {
-                    throw new UnsupportedOperationException("Non gestita paginazione con Dice!");
-                }
-
-
-                elementi = (List) responseEntity.getBody().get("sections");
-            } catch (Exception e) {
-                throw new RuntimeException("Errore chiamando: [POST]" + from + "/" + requestBody + "\n" + e.getMessage());
-            }
-            for (Map map : elementi) {
-                if (map.get("items") != null) {
-                    List<Map> items = (List) map.get("items");
-                    for (Map item : items) {
-                        Map single = (Map) item.get("event");
-
-                        String data = "";
-                        String titolo = "";
-                        String img = "";
-                        String href = "";
-                        String des = "";
-                        try {
-                            data = ((Map) ((Map) single).get("dates")).get("event_start_date").toString();
-                        } catch (Exception e) {
-                        }
-                        try {
-                            titolo = single.get("name").toString() + " - " + ((List<Map>) single.get("venues")).get(0).get("name").toString();//name + address;
-                        } catch (Exception e) {
-                        }
-                        try {
-                            img = ((Map) ((Map) single).get("images")).get("square").toString();
-                        } catch (Exception e) {
-                        }
-                        try {
-                            href = ((Map) ((Map) single).get("social_links")).get("event_share").toString();
-                        } catch (Exception e) {
-                        }
-                        try {
-                            des = ((Map) ((Map) single).get("about")).get("description").toString();
-                        } catch (Exception e) {
-                        }
-                        Show show = new Show(data, titolo, img, href, des, fonte, from);
-                        listShow.add(show);
-                    }
-                }
-            }
-            totShows.put(fonte, listShow.size() - showIniziali);
-        }
-    }
-
-
-    private void leggiConcordia() {
-        if (tipoElaborazione==TIPI_ELAB.ALL || tipoElaborazione==TIPI_ELAB.CONCORDIA) {
-            int showIniziali = listShow.size();
-            String fonte = "CONCORDIA";
-            String from = "https://www.teatrodellaconcordia.it/programma-prossimi-eventi/";
-            String response;
-            try {
-                response = restTemplate.getForObject(from, String.class);
-            } catch (Exception e) {
-                throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
-            }
-            Document doc = Jsoup.parse(response);
-            Elements select = doc.select(".list-half-item");
-            for (int i = 0; i < select.size(); i++) {
-                Element element = select.get(i);
-                try {
-                    String data = "";
-                    String titolo = "";
-                    String img = "";
-                    String href = "";
-                    String des = "";
-                    try {
-                        data = element.select(".event-date").first().text();
-                    } catch (Exception e) {
-                    }
-                    try {
-                        titolo = element.select(".event-title").first().text();
-                    } catch (Exception e) {
-                    }
-                    try {
-                        img = element.select(".list-half-image").first().attr("style").replace("background-image:url(", "").replace(")", "");
-                    } catch (Exception e) {
-                    }
-                    try {
-                        href = element.select(".list-half-item").first().attr("onclick").replace("window.location='", "").replace("';", "");
-                    } catch (Exception e) {
-                    }
-                    try {
-                        des = "";
-                    } catch (Exception e) {
-                    }
-                    Show show = new Show(data, titolo, img, href, des, fonte, from);
-                    listShow.add(show);
-                } catch (Exception e) {
-                }
-            }
-            totShows.put(fonte, listShow.size() - showIniziali);
+        } catch (RuntimeException e) {
+            logger.error(e.getMessage(), e);
+            skipped.add(fonte);
         }
     }
 
@@ -849,6 +898,7 @@ public class JobConfig extends TelegramLongPollingBot {
     int posizioneNews = 0;
     int posizioneShow = 0;
     String esito = "";
+    List<String> skipped = new ArrayList<>();
 
 
 }
