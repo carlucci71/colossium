@@ -112,9 +112,9 @@ public class JobConfig extends TelegramLongPollingBot {
                 if (jobExecution.getStatus() == BatchStatus.COMPLETED && tipoElaborazione == TIPI_ELAB.ALL) {
                     logger.info(totNewShows.toString());
                     inviaMessaggio("(" + contaEventi + ")\n" +
+                            "skipped: " + skipped  + "\n" +
                             "nuove news: " + messaggiInviati + "\n" +
-                            "nuovi show:" + totNewShows +
-                            "skipped: " + skipped  + "\n\n" +
+                            "nuovi show:" + totNewShows + "\n\n" +
                             esito +
                             "processati: " + totShows
                     );
