@@ -122,6 +122,9 @@ public class JobConfig extends TelegramLongPollingBot {
                 } else if (jobExecution.getStatus() == BatchStatus.FAILED) {
                     inviaMessaggio("ERRORE" + jobExecution.getAllFailureExceptions());
                     logger.info("FAILED: {}", jobExecution);
+                } else if (skipped.size()>0){
+                    inviaMessaggio("SKIPPED" + skipped);
+                    logger.info("SKIPPER: {}", skipped);
                 }
             }
         };
