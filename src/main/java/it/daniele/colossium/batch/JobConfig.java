@@ -582,60 +582,73 @@ public class JobConfig extends TelegramLongPollingBot {
         String fonte = "Dice";
         try {
             if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.DICE) {
-                int showIniziali = listShow.size();
-                int ti;
                 String from = "https://api.dice.fm/unified_search";
-                String requestBody = "{\"q\":\"torino\"}";
-                HttpHeaders headers = new HttpHeaders();
-                headers.setContentType(MediaType.APPLICATION_JSON);
-                headers.set("Host", "xx"); // Esempio di header di autorizzazione
-                HttpEntity<String> requestEntity = new HttpEntity<>(requestBody, headers);
-                List<Map> elementi;
-                try {
-                    ResponseEntity<Map> responseEntity = restTemplate.postForEntity(from, requestEntity, Map.class);
+                List<String> locations=List.of("Torino", "Turin");
+                int showIniziali = listShow.size();
+                List<Map> elementi=new ArrayList<>();
+                for (String location : locations) {
+                    int ti;
+                    String requestBody = "{\"q\":\"" + location +"\"}";
+                    HttpHeaders headers = new HttpHeaders();
+                    headers.setContentType(MediaType.APPLICATION_JSON);
+                    //headers.set("Host", "xx"); // Esempio di header di autorizzazione
+                    HttpEntity<String> requestEntity = new HttpEntity<>(requestBody, headers);
+                    try {
+                        ResponseEntity<Map> responseEntity = restTemplate.postForEntity(from, requestEntity, Map.class);
 
-                    if (responseEntity.getBody().get("next_page_cursor") != null) {
-                        throw new UnsupportedOperationException("Non gestita paginazione con Dice!");
+                        if (responseEntity.getBody().get("next_page_cursor") != null) {
+                            throw new UnsupportedOperationException("Non gestita paginazione con Dice!");
+                        }
+                        elementi.addAll( (List) responseEntity.getBody().get("sections"));
+                    } catch (Exception e) {
+                        throw new RuntimeException("Errore chiamando: [POST]" + from + "/" + requestBody + "\n" + e.getMessage());
                     }
-
-
-                    elementi = (List) responseEntity.getBody().get("sections");
-                } catch (Exception e) {
-                    throw new RuntimeException("Errore chiamando: [POST]" + from + "/" + requestBody + "\n" + e.getMessage());
                 }
                 for (Map map : elementi) {
                     if (map.get("items") != null) {
                         List<Map> items = (List) map.get("items");
                         for (Map item : items) {
                             Map single = (Map) item.get("event");
-
-                            String data = "";
-                            String titolo = "";
-                            String img = "";
-                            String href = "";
-                            String des = "";
-                            try {
-                                data = ((Map) ((Map) single).get("dates")).get("event_start_date").toString();
-                            } catch (Exception e) {
+                            if (single != null) {
+                                String address=((List<Map>) single.get("venues")).get(0).get("address").toString();
+                                boolean ok = false;
+                                for (String location : locations) {
+                                    if (address.toUpperCase().indexOf(location.toUpperCase())>-1){
+                                        ok=true;
+                                    }
+                                }
+                                if (ok) {
+                                    String data = "";
+                                    String titolo = "";
+                                    String img = "";
+                                    String href = "";
+                                    String des = "";
+                                    try {
+                                        data = ((Map) ((Map) single).get("dates")).get("event_start_date").toString();
+                                    } catch (Exception e) {
+                                    }
+                                    try {
+                                        titolo = single.get("name").toString() + " - " + ((List<Map>) single.get("venues")).get(0).get("name").toString();//name + address;
+                                    } catch (Exception e) {
+                                    }
+                                    try {
+                                        img = ((Map) ((Map) single).get("images")).get("square").toString();
+                                    } catch (Exception e) {
+                                    }
+                                    try {
+                                        href = ((Map) ((Map) single).get("social_links")).get("event_share").toString();
+                                    } catch (Exception e) {
+                                    }
+                                    try {
+                                        des = ((Map) ((Map) single).get("about")).get("description").toString();
+                                    } catch (Exception e) {
+                                    }
+                                    Show show = new Show(data, titolo, img, href, des, fonte, from);
+                                    listShow.add(show);
+                                } else {
+                                    System.out.println();
+                                }
                             }
-                            try {
-                                titolo = single.get("name").toString() + " - " + ((List<Map>) single.get("venues")).get(0).get("name").toString();//name + address;
-                            } catch (Exception e) {
-                            }
-                            try {
-                                img = ((Map) ((Map) single).get("images")).get("square").toString();
-                            } catch (Exception e) {
-                            }
-                            try {
-                                href = ((Map) ((Map) single).get("social_links")).get("event_share").toString();
-                            } catch (Exception e) {
-                            }
-                            try {
-                                des = ((Map) ((Map) single).get("about")).get("description").toString();
-                            } catch (Exception e) {
-                            }
-                            Show show = new Show(data, titolo, img, href, des, fonte, from);
-                            listShow.add(show);
                         }
                     }
                 }
