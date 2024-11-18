@@ -15,13 +15,11 @@ public class News {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private int id;
-	public News(String data, String titolo, String des) {
+	public News(String titolo, String des) {
 		super();
-		this.data = data;
 		this.titolo = titolo;
 		this.des = des;
 	}
-	private String data;
 	private String titolo;
 	private String des;
 	private LocalDateTime dataConsegna;
@@ -30,12 +28,6 @@ public class News {
 	}
 	public void setId(int id) {
 		this.id = id;
-	}
-	public String getData() {
-		return data;
-	}
-	public void setData(String data) {
-		this.data = data;
 	}
 	public String getTitolo() {
 		return titolo;

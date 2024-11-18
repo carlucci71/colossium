@@ -6,7 +6,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import it.daniele.colossium.domain.News;
 import it.daniele.colossium.domain.Show;
 import it.daniele.colossium.domain.TelegramMsg;
-import org.glassfish.jersey.internal.util.collection.Values;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -53,9 +52,7 @@ import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -95,7 +92,7 @@ public class JobConfig extends TelegramLongPollingBot {
                 .build();
     }
 
-    enum TIPI_ELAB {NEWS_COLOSSEO, SHOW_COLOSSEO, ENEBA, TICKET_ONE, CONCORDIA, VIVATICKET, DICE, TICKET_MASTER, MAIL_TICKET, ALL}
+    enum TIPI_ELAB {NEWS_COLOSSEO, SHOW_COLOSSEO, ENEBA, TICKET_ONE, SALONE_LIBRO, CONCORDIA, VIVATICKET, DICE, TICKET_MASTER, MAIL_TICKET, ALL}
 
     ;
     TIPI_ELAB tipoElaborazione;
@@ -112,7 +109,7 @@ public class JobConfig extends TelegramLongPollingBot {
                 if (jobExecution.getStatus() == BatchStatus.COMPLETED && tipoElaborazione == TIPI_ELAB.ALL) {
                     logger.info(totNewShows.toString());
                     inviaMessaggio("(" + contaEventi + ")\n" +
-                            "skipped: " + skipped  + "\n" +
+                            "skipped: " + skipped + "\n" +
                             "nuove news: " + messaggiInviati + "\n" +
                             "nuovi show:" + totNewShows + "\n\n" +
                             esito +
@@ -122,7 +119,7 @@ public class JobConfig extends TelegramLongPollingBot {
                 } else if (jobExecution.getStatus() == BatchStatus.FAILED) {
                     inviaMessaggio("ERRORE" + jobExecution.getAllFailureExceptions());
                     logger.info("FAILED: {}", jobExecution);
-                } else if (skipped.size()>0){
+                } else if (skipped.size() > 0) {
                     inviaMessaggio("SKIPPED" + skipped);
                     logger.info("SKIPPER: {}", skipped);
                 }
@@ -152,6 +149,8 @@ public class JobConfig extends TelegramLongPollingBot {
     private Step stepInit() {
         return stepBuilderFactory.get("stepInit")
                 .tasklet((contribution, chunkContext) -> {
+//                    leggiSaloneLibro();
+                    //https://www.ticket.it/_controls/Ticketit.Web.Module/SearchHelper.aspx?uid=d563e15f-d1e3-4d67-82b3-691b8b30036f&site=321&culture=it-IT&pagesize=100&idx=1&__l=5
                     leggiNewsColosseo();
                     leggiShowColosseo();
                     leggiTicketOne();
@@ -162,6 +161,7 @@ public class JobConfig extends TelegramLongPollingBot {
                     leggiMailTicket();
                     leggiEneba();
                     cancellaNotificheTelegramScadute();
+
                     return RepeatStatus.FINISHED;
                 })
                 .listener(stepResultListener())
@@ -191,19 +191,16 @@ public class JobConfig extends TelegramLongPollingBot {
         try {
             if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.SHOW_COLOSSEO) {
                 int showIniziali = listShow.size();
-                String from = "https://www.teatrocolosseo.it/Stagione.aspx";
-                String response;
+                String from = "https://api.teatrocolosseo.it/api/spettacoli";
+                List<Map<String, Object>> response;
                 try {
-                    response = restTemplate.getForObject(from, String.class);
+                    response = restTemplate.getForObject(from, List.class);
                 } catch (Exception e) {
                     throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
                 }
-                Document doc = Jsoup.parse(response);
-                Elements select = doc.select(".boxspet");
-                for (int i = 0; i < select.size(); i++) {
-                    Element element = select.get(i);
+                for (int i = 0; i < response.size(); i++) {
+                    Map<String, Object> element = response.get(i);
                     try {
-                        String id = element.select(".spett-box-image").first().attr("id").replace("_imageBox", "");
                         String data = "";
                         String titolo = "";
                         String img = "";
@@ -211,27 +208,28 @@ public class JobConfig extends TelegramLongPollingBot {
                         String des = "";
 
                         try {
-                            data = doc.select("span[id*=" + id + "_lblDataIntro]").text();
+                            data = element.get("dal").toString();
                         } catch (Exception e) {
                         }
 
                         try {
-                            titolo = doc.select("#" + id + "_divOverlay1 strong").first().text();
+                            titolo = element.get("spettacolo").toString() + " - " + element.get("compagnia").toString();
                         } catch (Exception e) {
                         }
 
                         try {
-                            img = "https://www.teatrocolosseo.it/" + element.select(".spett-box-image").first().attr("data-source");
+                            img = "https://api.teatrocolosseo.it/api/image/" + element.get("img_copertina").toString() + "?type=spettacolo";
                         } catch (Exception e) {
                         }
 
                         try {
-                            href = "https://www.teatrocolosseo.it/" + doc.select("a[id*=" + id + "_hlVisualizza]").first().attr("href");
+                            href = element.get("link_webshop").toString();
                         } catch (Exception e) {
                         }
 
                         try {
-                            des = "";
+                            des = element.get("descrizione").toString();
+                            des = des.replaceAll("<.*?>", "");
                         } catch (Exception e) {
                         }
                         Show show = new Show(data, titolo, img, href, des, fonte, from);
@@ -311,19 +309,17 @@ public class JobConfig extends TelegramLongPollingBot {
         String fonte = "NEWS_COLOSSEO";
         try {
             if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.NEWS_COLOSSEO) {
-                String from = "https://www.teatrocolosseo.it/News/Default.aspx";
-                String response;
+                String from = "https://api.teatrocolosseo.it/api/notizie";
+                List<Map<String, Object>> response;
                 try {
-                    response = restTemplate.getForObject(from, String.class);
+                    response = restTemplate.getForObject(from, List.class);
                 } catch (Exception e) {
                     throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
                 }
-                Document doc = Jsoup.parse(response);
-                for (int i = 0; i < ConstantColossium.MAX_NEWS; i++) {
-                    String textDes = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblDescrizione1]").text();
-                    String textData = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblData]").text();
-                    String textTitolo = doc.select("span[id*=ctl00_ContentPlaceHolder1_PageRPT_News_ctl02_ctl0" + i + "_lblTitolo]").text();
-                    News news = new News(textData, textTitolo, textDes);
+                for (Map<String, Object> notizia : response) {
+                    String des=notizia.get("descrizione").toString();
+                    des = des.replaceAll("<.*?>", "");
+                    News news = new News(notizia.get("titolo").toString(), des);
                     listNews.add(news);
                 }
             }
@@ -583,12 +579,12 @@ public class JobConfig extends TelegramLongPollingBot {
         try {
             if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.DICE) {
                 String from = "https://api.dice.fm/unified_search";
-                List<String> locations=List.of("Torino", "Turin");
+                List<String> locations = List.of("Torino", "Turin");
                 int showIniziali = listShow.size();
-                List<Map> elementi=new ArrayList<>();
+                List<Map> elementi = new ArrayList<>();
                 for (String location : locations) {
                     int ti;
-                    String requestBody = "{\"q\":\"" + location +"\"}";
+                    String requestBody = "{\"q\":\"" + location + "\"}";
                     HttpHeaders headers = new HttpHeaders();
                     headers.setContentType(MediaType.APPLICATION_JSON);
                     //headers.set("Host", "xx"); // Esempio di header di autorizzazione
@@ -599,7 +595,7 @@ public class JobConfig extends TelegramLongPollingBot {
                         if (responseEntity.getBody().get("next_page_cursor") != null) {
                             throw new UnsupportedOperationException("Non gestita paginazione con Dice!");
                         }
-                        elementi.addAll( (List) responseEntity.getBody().get("sections"));
+                        elementi.addAll((List) responseEntity.getBody().get("sections"));
                     } catch (Exception e) {
                         throw new RuntimeException("Errore chiamando: [POST]" + from + "/" + requestBody + "\n" + e.getMessage());
                     }
@@ -610,11 +606,11 @@ public class JobConfig extends TelegramLongPollingBot {
                         for (Map item : items) {
                             Map single = (Map) item.get("event");
                             if (single != null) {
-                                String address=((List<Map>) single.get("venues")).get(0).get("address").toString();
+                                String address = ((List<Map>) single.get("venues")).get(0).get("address").toString();
                                 boolean ok = false;
                                 for (String location : locations) {
-                                    if (address.toUpperCase().indexOf(location.toUpperCase())>-1){
-                                        ok=true;
+                                    if (address.toUpperCase().indexOf(location.toUpperCase()) > -1) {
+                                        ok = true;
                                     }
                                 }
                                 if (ok) {
@@ -716,6 +712,54 @@ public class JobConfig extends TelegramLongPollingBot {
         }
     }
 
+    private void leggiSaloneLibro() {
+        String fonte = "SALONE_LIBRO";
+        try {
+            if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.SALONE_LIBRO) {
+                int showIniziali = listShow.size();
+                int page = 1;
+                Map response;
+                Integer f;
+                do {
+                    String from = "https://programma.salonelibro.it/api/v1/bookable-program-items";
+                    try {
+                        from = "https://programma.salonelibro.it/api/v1/bookable-program-items?include=&filter[after]=" + "2024-04-19%2012:41" + "&page[size]=10&page[number]=" + page;
+                        response = restTemplate.getForObject(from, Map.class);
+                        Map meta = (Map) response.get("meta");
+                        f = (Integer) meta.get("from");
+                        List<Map> data = (List<Map>) response.get("data");
+                        for (Map datum : data) {
+                            String title = datum.get("title").toString();
+                            String subtitle = datum.get("subtitle").toString();
+                            String description = datum.get("description").toString();
+                            String date = datum.get("date").toString();
+                            String time = datum.get("time").toString();
+                            String bookable_places = datum.get("bookable_places").toString();
+                            String booked_places = datum.get("booked_places").toString();
+                            System.out.println(
+                                    title.replace(";", "") + ";" +
+                                            subtitle.replace(";", "") + ";" +
+                                            description.replace(";", "") + ";" +
+                                            date.replace(";", "") + ";" +
+                                            time.replace(";", "") + ";" +
+                                            bookable_places.replace(";", "") + ";" +
+                                            booked_places.replace(";", "") + ";"
+                            );
+                        }
+                    } catch (Exception e) {
+                        throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
+                    }
+                    totShows.put(fonte, listShow.size() - showIniziali);
+                    page++;
+                } while (f != null);
+            }
+        } catch (RuntimeException e) {
+            logger.error(e.getMessage(), e);
+            skipped.add(fonte);
+        }
+    }
+
+
     private Step stepNews() {
         return stepBuilderFactory.get("StepNews")
                 .<News, News>chunk(ConstantColossium.CHUNK)
@@ -756,9 +800,6 @@ public class JobConfig extends TelegramLongPollingBot {
                         inviaMessaggio(el.toString());
                         messaggiInviati++;
                         contaEventi++;
-                        if (messaggiInviati == ConstantColossium.MAX_NEWS) {
-                            inviaMessaggio("Leggi le NEWS!!!!!!!");
-                        }
                     }
                 });
     }
@@ -809,7 +850,12 @@ public class JobConfig extends TelegramLongPollingBot {
                         tot++;
                         totNewShows.put(fonte, tot);
                         contaEventi++;
-                        entityManager.persist(el);
+                        try {
+                            entityManager.persist(el);
+                        } catch(Exception e)
+                        {
+                            System.out.println();
+                        }
                         sendImageToChat(el.getImg(), el.toString());
                     }
                 });
