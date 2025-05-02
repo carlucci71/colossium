@@ -207,30 +207,37 @@ public class JobConfig extends TelegramLongPollingBot {
                         String href = "";
                         String des = "";
 
+                        Integer id = (Integer) element.get("id");
+
                         try {
                             data = element.get("dal").toString();
                         } catch (Exception e) {
+                            data = "Eccezione in: " + id + " dal ";
                         }
 
                         try {
-                            titolo = element.get("spettacolo").toString() + " - " + element.get("compagnia").toString();
+                            titolo = element.get("spettacolo").toString() + " - " + (element.get("compagnia")==null?"":element.get("compagnia").toString());
                         } catch (Exception e) {
+                            titolo = "Eccezione in: " + id + " spettacolo ";
                         }
 
                         try {
                             img = "https://api.teatrocolosseo.it/api/image/" + element.get("img_copertina").toString() + "?type=spettacolo";
                         } catch (Exception e) {
+                            System.out.println("Eccezione in: " + id + " image ");
                         }
 
                         try {
                             href = element.get("link_webshop").toString();
                         } catch (Exception e) {
+                            System.out.println("Eccezione in: " + id + " link ");
                         }
 
                         try {
-                            des = element.get("descrizione").toString();
+                            des = element.get("descrizione")==null?"?" + id + "?":element.get("descrizione").toString();
                             des = des.replaceAll("<.*?>", "");
                         } catch (Exception e) {
+                            des = "Eccezione in: " + id + " descrizione ";
                         }
                         Show show = new Show(data, titolo, img, href, des, fonte, from);
                         listShow.add(show);
@@ -962,5 +969,7 @@ public class JobConfig extends TelegramLongPollingBot {
     String esito = "";
     List<String> skipped = new ArrayList<>();
 
+
+    
 
 }
