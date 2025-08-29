@@ -1,11 +1,13 @@
-
 package it.daniele.colossium.batch;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import it.daniele.colossium.domain.News;
+import it.daniele.colossium.domain.SearchCriteria;
 import it.daniele.colossium.domain.Show;
 import it.daniele.colossium.domain.TelegramMsg;
+import it.daniele.colossium.repository.RicercheRepository;
+import org.apache.commons.lang3.ObjectUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -29,7 +31,6 @@ import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -38,30 +39,53 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.client.RestTemplate;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.send.SendPhoto;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
+import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
+import org.telegram.telegrambots.meta.generics.BotSession;
+import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 import secrets.ConstantColossium;
 
+import javax.annotation.PostConstruct;
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 
 @SuppressWarnings("deprecation")
 @Configuration
 @EnableBatchProcessing
 public class JobConfig extends TelegramLongPollingBot {
+
+    public static final String TOKEN = "#@@#";
+    public static final String TOKEN_ANNO = "#ANNO#";
+    public static final String TOKEN_DATA = "#DATA#";
+    public static final String TOKEN_MESE = "#MESE#";
+    public static final String TOKEN_GIORNO = "#GIORNO#";
+    public static final String TOKEN_CANCELLA = "#CANCELLA#";
+    public static final String TOKEN_RICERCA = "#RICERCA#";
+
+    JobConfig() {
+        super(ConstantColossium.BOT_TOKEN);
+    }
 
     RestTemplate restTemplate = new RestTemplate();
     Logger logger = LoggerFactory.getLogger(this.getClass());
@@ -73,6 +97,9 @@ public class JobConfig extends TelegramLongPollingBot {
     JdbcTemplate jdbcTemplate;
 
     @Autowired
+    RicercheRepository ricercheRepository;
+
+    @Autowired
     StepBuilderFactory stepBuilderFactory;
 
     @Autowired
@@ -81,7 +108,7 @@ public class JobConfig extends TelegramLongPollingBot {
 
     int contaEventi;
 
-    @Bean
+    //@Bean
     public Job createJob() {
         return jobBuilderFactory.get("MyJob")
                 .incrementer(new RunIdIncrementer())
@@ -92,7 +119,7 @@ public class JobConfig extends TelegramLongPollingBot {
                 .build();
     }
 
-    enum TIPI_ELAB {NEWS_COLOSSEO, SHOW_COLOSSEO, ENEBA, TICKET_ONE, SALONE_LIBRO, CONCORDIA, VIVATICKET, DICE, TICKET_MASTER, MAIL_TICKET, ALL}
+    enum TIPI_ELAB {NEWS_COLOSSEO, SHOW_COLOSSEO, TICKET_ONE, SALONE_LIBRO, CONCORDIA, VIVATICKET, DICE, TICKET_MASTER, MAIL_TICKET, ALL}
 
     ;
     TIPI_ELAB tipoElaborazione;
@@ -103,10 +130,19 @@ public class JobConfig extends TelegramLongPollingBot {
             public void beforeJob(JobExecution jobExecution) {
                 tipoElaborazione = TIPI_ELAB.valueOf(jobExecution.getJobParameters().getString("tipoElaborazione"));
                 logger.debug("Called beforeJob: " + tipoElaborazione);
+                totShows = new HashMap<>();
+                totNewShows = new HashMap<>();
+                messaggiInviati = 0;
+                listNews = new ArrayList<>();
+                listShow = new ArrayList<>();
+                posizioneNews = 0;
+                posizioneShow = 0;
+                esito = "";
+                skipped = new ArrayList<>();
             }
 
             public void afterJob(JobExecution jobExecution) {
-                if (jobExecution.getStatus() == BatchStatus.COMPLETED && tipoElaborazione == TIPI_ELAB.ALL) {
+                if (jobExecution.getStatus() == BatchStatus.COMPLETED) {
                     logger.info(totNewShows.toString());
                     inviaMessaggio("(" + contaEventi + ")\n" +
                             "skipped: " + skipped + "\n" +
@@ -149,8 +185,6 @@ public class JobConfig extends TelegramLongPollingBot {
     private Step stepInit() {
         return stepBuilderFactory.get("stepInit")
                 .tasklet((contribution, chunkContext) -> {
-//                    leggiSaloneLibro();
-                    //https://www.ticket.it/_controls/Ticketit.Web.Module/SearchHelper.aspx?uid=d563e15f-d1e3-4d67-82b3-691b8b30036f&site=321&culture=it-IT&pagesize=100&idx=1&__l=5
                     leggiNewsColosseo();
                     leggiShowColosseo();
                     leggiTicketOne();
@@ -159,9 +193,7 @@ public class JobConfig extends TelegramLongPollingBot {
                     leggiDice();
                     leggiTicketMaster();
                     leggiMailTicket();
-                    leggiEneba();
                     cancellaNotificheTelegramScadute();
-
                     return RepeatStatus.FINISHED;
                 })
                 .listener(stepResultListener())
@@ -216,7 +248,7 @@ public class JobConfig extends TelegramLongPollingBot {
                         }
 
                         try {
-                            titolo = element.get("spettacolo").toString() + " - " + (element.get("compagnia")==null?"":element.get("compagnia").toString());
+                            titolo = element.get("spettacolo").toString() + " - " + (element.get("compagnia") == null ? "" : element.get("compagnia").toString());
                         } catch (Exception e) {
                             titolo = "Eccezione in: " + id + " spettacolo ";
                         }
@@ -224,22 +256,30 @@ public class JobConfig extends TelegramLongPollingBot {
                         try {
                             img = "https://api.teatrocolosseo.it/api/image/" + element.get("img_copertina").toString() + "?type=spettacolo";
                         } catch (Exception e) {
-                            System.out.println("Eccezione in: " + id + " image ");
+                            logger.error("Eccezione in: " + id + " image ");
                         }
 
                         try {
                             href = element.get("link_webshop").toString();
                         } catch (Exception e) {
-                            System.out.println("Eccezione in: " + id + " link ");
+                            logger.error("Eccezione in: " + id + " link ");
                         }
 
                         try {
-                            des = element.get("descrizione")==null?"?" + id + "?":element.get("descrizione").toString();
+                            des = element.get("descrizione") == null ? "?" + id + "?" : element.get("descrizione").toString();
                             des = des.replaceAll("<.*?>", "");
                         } catch (Exception e) {
                             des = "Eccezione in: " + id + " descrizione ";
                         }
-                        Show show = new Show(data, titolo, img, href, des, fonte, from);
+
+                        LocalDateTime ld;
+                        try {
+                            ld = LocalDateTime.parse(data.replace("Z", ""));
+                        } catch (Exception e) {
+                            ld = LocalDateTime.now();
+                        }
+
+                        Show show = new Show(data, titolo, img, href, des, fonte, from, ld);
                         listShow.add(show);
                     } catch (Exception e) {
                     }
@@ -252,8 +292,70 @@ public class JobConfig extends TelegramLongPollingBot {
         }
     }
 
+    public void gimmi(Fonti fonte) {
+        String sql = "select * from show where local_data is null and upper(fonte) like '%" + fonte.name() + "%' ";
+        List<Show> shows = jdbcTemplate.query(sql, (rs, rowNum) -> {
+            Show show = new Show();
+            show.setData(rs.getString("data"));
+            show.setFonte(rs.getString("fonte"));
+            show.setId(rs.getInt("id"));
+            return show;
+        });
+        shows.forEach(show -> {
+            LocalDateTime ld;
+            String data = show.getData();
+            try {
+                switch (fonte) {
+                    case COLOSSEO:
+                        ld = LocalDateTime.parse(data.replace("Z", ""));
+                        break;
+                    case CONCORDIA:
+                        DateTimeFormatter formatterC = DateTimeFormatter.ofPattern("EEEE dd/MM/yyyy '— Ore' HH:mm", Locale.ITALIAN);
+                        String toParse;
+                        String firstDatePart = data.split("-")[0].trim();
+                        if (firstDatePart.indexOf(":") == -1) {
+                            String timePart = data.substring(data.indexOf("Ore"));
+                            toParse = firstDatePart + " — " + timePart;
+                        } else {
+                            toParse = data;
+                        }
+                        ld = LocalDateTime.parse(toParse, formatterC);
+                        break;
+                    case DICE:
+                        OffsetDateTime odt = OffsetDateTime.parse(data);
+                        ld = odt.atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+                        break;
+                    case MAILTICKET:
+                        DateTimeFormatter formatterM = DateTimeFormatter.ofPattern("dd/MMM/yyyy", Locale.ITALIAN);
+                        ld = LocalDate.parse(data, formatterM).atStartOfDay();
+                        break;
+                    case TICKETMASTER:
+                        ld = LocalDateTime.parse(data.replace("Z", ""));
+                        break;
+                    case TICKETONE:
+                        ld = OffsetDateTime.parse(data).atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+                        break;
+                    case VIVATICKET:
+                        ld = LocalDateTime.parse(data.replace("Z", ""));
+                        break;
+                    default:
+                        throw new RuntimeException("Fonte non gestita: " + fonte);
+
+                }
+
+            } catch (Exception e) {
+                ld = LocalDateTime.now();
+            }
+            String sql2 = "update show set local_data = '" + ld + "' where id = " + show.getId();
+            System.out.println(sql2);
+            jdbcTemplate.update(sql2);
+
+        });
+    }
+
     private void leggiMailTicket() {
         String fonte = "MAILTICKET";
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MMM/yyyy", Locale.ITALIAN);
         try {
             if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.MAIL_TICKET) {
                 int showIniziali = listShow.size();
@@ -297,7 +399,16 @@ public class JobConfig extends TelegramLongPollingBot {
                                 des = "";
                             } catch (Exception e) {
                             }
-                            Show show = new Show(data, titolo, img, href, des, fonte, from);
+
+                            LocalDateTime ld;
+                            try {
+                                ld = LocalDate.parse(data, formatter).atStartOfDay();
+                            } catch (Exception e) {
+                                ld = LocalDateTime.now();
+                            }
+
+
+                            Show show = new Show(data, titolo, img, href, des, fonte, from, ld);
                             listShow.add(show);
                         } catch (Exception e) {
                         }
@@ -324,73 +435,11 @@ public class JobConfig extends TelegramLongPollingBot {
                     throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
                 }
                 for (Map<String, Object> notizia : response) {
-                    String des=notizia.get("descrizione").toString();
+                    String des = notizia.get("descrizione").toString();
                     des = des.replaceAll("<.*?>", "");
                     News news = new News(notizia.get("titolo").toString(), des);
                     listNews.add(news);
                 }
-            }
-        } catch (RuntimeException e) {
-            logger.error(e.getMessage(), e);
-            skipped.add(fonte);
-        }
-    }
-
-    private void leggiEneba() {
-        String fonte = "Eneba";
-        try {
-            if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.ENEBA) {
-                int showIniziali = listShow.size();
-                Map<String, Object> product;
-                int pagina = 1;
-                List<Map<String, Object>> ret = new ArrayList<>();
-                do {
-                    Map<String, Object> map;
-                    String from = "https://www.eneba.com/it/store/psn?drms[]=psn&page=" + pagina + "&regions[]=italy&types[]=subscription&types[]=giftcard";
-                    System.out.println(from);
-                    pagina++;
-                    String response = "";
-                    try {
-                        response = restTemplate.getForObject(from, String.class);
-                        Document doc = Jsoup.parse(response);
-                        String json = response.substring(response.indexOf("ROOT_QUERY") - 2);
-                        json = json.substring(0, json.indexOf("</script>"));
-                        map = jsonToMap(json);
-                    } catch (Exception e) {
-                        System.out.println(response);
-                        throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
-                    }
-//            System.out.println(json);
-//            System.out.println(map);
-                    product =
-                            map.entrySet()
-                                    .stream()
-                                    .filter(x -> x.getKey().startsWith("Product::"))
-                                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
-                    product.forEach((k, v) -> {
-                        Map r = new HashMap();
-                        Map val = (Map) v;
-                        Map m;
-                        r.put("name", val.get("name"));
-                        m = (Map) val.get("description");
-                        r.put("des", m.get("title"));
-                        m = (Map) val.get("cover({\"size\":300})");
-                        r.put("img", m.get("src"));
-                        m = (Map) val.get("cheapestAuction");
-                        if (m != null) {
-                            Map au = (Map) map.get(m.get("__ref"));
-                            Map pr = (Map) au.get("price({\"currency\":\"EUR\"})");
-                            Integer amount = (Integer) pr.get("amount");
-                            r.put("price", amount / 100d);
-                            ret.add(r);
-                        }
-                    });
-                } while (product.size() > 0);
-                for (Map<String, Object> map : ret) {
-                    Show show = new Show("", map.get("name").toString(), map.get("img").toString(), null, map.get("des").toString(), fonte, map.get("des").toString() + " --> " + map.get("price").toString());
-                    listShow.add(show);
-                }
-                totShows.put(fonte, listShow.size() - showIniziali);
             }
         } catch (RuntimeException e) {
             logger.error(e.getMessage(), e);
@@ -454,7 +503,14 @@ public class JobConfig extends TelegramLongPollingBot {
                             des = (map.get("description") != null ? map.get("description").toString() : "");
                         } catch (Exception e) {
                         }
-                        Show show = new Show(data, titolo, img, href, des, fonte, from);
+                        LocalDateTime ld;
+                        try {
+                            ld = OffsetDateTime.parse(data).atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+                        } catch (Exception e) {
+                            ld = LocalDateTime.now();
+                        }
+
+                        Show show = new Show(data, titolo, img, href, des, fonte, from, ld);
                         listShow.add(show);
                     }
                     page++;
@@ -511,7 +567,15 @@ public class JobConfig extends TelegramLongPollingBot {
                             des = map.get("title").toString() + "/" + ((Map) map.get("venue")).get("name").toString();
                         } catch (Exception e) {
                         }
-                        Show show = new Show(data, titolo, img, href, des, fonte, from);
+
+                        LocalDateTime ld;
+                        try {
+                            ld = LocalDateTime.parse(data.replace("Z", ""));
+                        } catch (Exception e) {
+                            ld = LocalDateTime.now();
+                        }
+
+                        Show show = new Show(data, titolo, img, href, des, fonte, from, ld);
                         listShow.add(show);
                     }
                     page++;
@@ -568,7 +632,14 @@ public class JobConfig extends TelegramLongPollingBot {
                             des = map.get("title").toString();
                         } catch (Exception e) {
                         }
-                        Show show = new Show(data, titolo, img, href, des, fonte, from);
+                        LocalDateTime ld;
+                        try {
+                            ld = LocalDateTime.parse(data.replace("Z", ""));
+                        } catch (Exception e) {
+                            ld = LocalDateTime.now();
+                        }
+
+                        Show show = new Show(data, titolo, img, href, des, fonte, from, ld);
                         listShow.add(show);
                     }
                     page++;
@@ -613,44 +684,42 @@ public class JobConfig extends TelegramLongPollingBot {
                         for (Map item : items) {
                             Map single = (Map) item.get("event");
                             if (single != null) {
-                                String address = ((List<Map>) single.get("venues")).get(0).get("address").toString();
-                                boolean ok = false;
-                                for (String location : locations) {
-                                    if (address.toUpperCase().indexOf(location.toUpperCase()) > -1) {
-                                        ok = true;
-                                    }
+                                String data = "";
+                                String titolo = "";
+                                String img = "";
+                                String href = "";
+                                String des = "";
+                                try {
+                                    data = ((Map) ((Map) single).get("dates")).get("event_start_date").toString();
+                                } catch (Exception e) {
                                 }
-                                if (ok) {
-                                    String data = "";
-                                    String titolo = "";
-                                    String img = "";
-                                    String href = "";
-                                    String des = "";
-                                    try {
-                                        data = ((Map) ((Map) single).get("dates")).get("event_start_date").toString();
-                                    } catch (Exception e) {
-                                    }
-                                    try {
-                                        titolo = single.get("name").toString() + " - " + ((List<Map>) single.get("venues")).get(0).get("name").toString();//name + address;
-                                    } catch (Exception e) {
-                                    }
-                                    try {
-                                        img = ((Map) ((Map) single).get("images")).get("square").toString();
-                                    } catch (Exception e) {
-                                    }
-                                    try {
-                                        href = ((Map) ((Map) single).get("social_links")).get("event_share").toString();
-                                    } catch (Exception e) {
-                                    }
-                                    try {
-                                        des = ((Map) ((Map) single).get("about")).get("description").toString();
-                                    } catch (Exception e) {
-                                    }
-                                    Show show = new Show(data, titolo, img, href, des, fonte, from);
-                                    listShow.add(show);
-                                } else {
-                                    System.out.println();
+                                try {
+                                    titolo = single.get("name").toString() + " - " + ((List<Map>) single.get("venues")).get(0).get("name").toString();//name + address;
+                                } catch (Exception e) {
                                 }
+                                try {
+                                    img = ((Map) ((Map) single).get("images")).get("square").toString();
+                                } catch (Exception e) {
+                                }
+                                try {
+                                    href = ((Map) ((Map) single).get("social_links")).get("event_share").toString();
+                                } catch (Exception e) {
+                                }
+                                try {
+                                    des = ((Map) ((Map) single).get("about")).get("description").toString();
+                                } catch (Exception e) {
+                                }
+                                LocalDateTime ld;
+                                try {
+                                    OffsetDateTime odt = OffsetDateTime.parse(data);
+                                    ld = odt.atZoneSameInstant(ZoneId.systemDefault()).toLocalDateTime();
+                                } catch (Exception e) {
+                                    ld = LocalDateTime.now();
+                                }
+
+
+                                Show show = new Show(data, titolo, img, href, des, fonte, from, ld);
+                                listShow.add(show);
                             }
                         }
                     }
@@ -666,6 +735,7 @@ public class JobConfig extends TelegramLongPollingBot {
 
     private void leggiConcordia() {
         String fonte = "CONCORDIA";
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEEE dd/MM/yyyy '— Ore' HH:mm", Locale.ITALIAN);
         try {
             if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.CONCORDIA) {
                 int showIniziali = listShow.size();
@@ -706,59 +776,27 @@ public class JobConfig extends TelegramLongPollingBot {
                             des = "";
                         } catch (Exception e) {
                         }
-                        Show show = new Show(data, titolo, img, href, des, fonte, from);
+                        LocalDateTime ld;
+                        try {
+                            String toParse;
+                            String firstDatePart = data.split("-")[0].trim();
+                            if (firstDatePart.indexOf(":") == -1) {
+                                String timePart = data.substring(data.indexOf("Ore"));
+                                toParse = firstDatePart + " — " + timePart;
+                            } else {
+                                toParse = data;
+                            }
+                            ld = LocalDateTime.parse(toParse, formatter);
+                        } catch (Exception e) {
+                            ld = LocalDateTime.now();
+                        }
+
+                        Show show = new Show(data, titolo, img, href, des, fonte, from, ld);
                         listShow.add(show);
                     } catch (Exception e) {
                     }
                 }
                 totShows.put(fonte, listShow.size() - showIniziali);
-            }
-        } catch (RuntimeException e) {
-            logger.error(e.getMessage(), e);
-            skipped.add(fonte);
-        }
-    }
-
-    private void leggiSaloneLibro() {
-        String fonte = "SALONE_LIBRO";
-        try {
-            if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.SALONE_LIBRO) {
-                int showIniziali = listShow.size();
-                int page = 1;
-                Map response;
-                Integer f;
-                do {
-                    String from = "https://programma.salonelibro.it/api/v1/bookable-program-items";
-                    try {
-                        from = "https://programma.salonelibro.it/api/v1/bookable-program-items?include=&filter[after]=" + "2024-04-19%2012:41" + "&page[size]=10&page[number]=" + page;
-                        response = restTemplate.getForObject(from, Map.class);
-                        Map meta = (Map) response.get("meta");
-                        f = (Integer) meta.get("from");
-                        List<Map> data = (List<Map>) response.get("data");
-                        for (Map datum : data) {
-                            String title = datum.get("title").toString();
-                            String subtitle = datum.get("subtitle").toString();
-                            String description = datum.get("description").toString();
-                            String date = datum.get("date").toString();
-                            String time = datum.get("time").toString();
-                            String bookable_places = datum.get("bookable_places").toString();
-                            String booked_places = datum.get("booked_places").toString();
-                            System.out.println(
-                                    title.replace(";", "") + ";" +
-                                            subtitle.replace(";", "") + ";" +
-                                            description.replace(";", "") + ";" +
-                                            date.replace(";", "") + ";" +
-                                            time.replace(";", "") + ";" +
-                                            bookable_places.replace(";", "") + ";" +
-                                            booked_places.replace(";", "") + ";"
-                            );
-                        }
-                    } catch (Exception e) {
-                        throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
-                    }
-                    totShows.put(fonte, listShow.size() - showIniziali);
-                    page++;
-                } while (f != null);
             }
         } catch (RuntimeException e) {
             logger.error(e.getMessage(), e);
@@ -832,7 +870,6 @@ public class JobConfig extends TelegramLongPollingBot {
 
     private ItemProcessor<Show, Show> processorShow() {
         return item -> {
-            logger.info(item.getDes());
             List<Show> resultList = entityManager.createQuery("select n from Show n where titolo = :titolo and fonte = :fonte and des = :des", Show.class)
                     .setParameter("titolo", item.getTitolo())
                     .setParameter("fonte", item.getFonte())
@@ -859,9 +896,8 @@ public class JobConfig extends TelegramLongPollingBot {
                         contaEventi++;
                         try {
                             entityManager.persist(el);
-                        } catch(Exception e)
-                        {
-                            System.out.println();
+                        } catch (Exception e) {
+                            e.printStackTrace();
                         }
                         sendImageToChat(el.getImg(), el.toString());
                     }
@@ -957,19 +993,484 @@ public class JobConfig extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
+        try {
+            if (update.hasMessage()) {
+                handleMessage(update.getMessage());
+            } else if (update.hasCallbackQuery()) {
+                handleCallback(update.getCallbackQuery());
+            }
+
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
-    Map<String, Integer> totShows = new HashMap<>();
-    Map<String, Integer> totNewShows = new HashMap<>();
-    int messaggiInviati = 0;
-    private List<News> listNews = new ArrayList<>();
-    private List<Show> listShow = new ArrayList<>();
-    int posizioneNews = 0;
-    int posizioneShow = 0;
-    String esito = "";
-    List<String> skipped = new ArrayList<>();
+    private void handleMessage(Message message) throws TelegramApiException {
+        Long chatId = message.getChat().getId();
+
+        String testo = message.getText();
+        SearchCriteria criteria = userCriteria.getOrDefault(chatId, new SearchCriteria());
+
+        if (testo.equals("/componi")) {
+            userState.remove(chatId);
+            userCriteria.remove(chatId);
+            execute(sendInlineKeyBoard(chatId, testo, TipoKeyboard.FILTRI));
+        } else if (testo.equals("/ricerca")) {
+            ricerca(chatId);
+        } else {
+            String stato = userState.get(chatId);
+            if (stato != null) {
+                SearchCriteria.FiltriRicerca filtroRicerca = SearchCriteria.FiltriRicerca.valueOf(stato);
+                switch (filtroRicerca) {
+                    case TESTO:
+                        criteria.setTesto(testo);
+                        break;
+                    case FONTE:
+                        throw new RuntimeException("Fonte solo con keyboard");
+                    case DATA_MIN:
+                        throw new RuntimeException("Data solo con keyboard");
+                    case DATA_MAX:
+                        throw new RuntimeException("Data solo con keyboard");
+                    case DATA_CONSEGNA_MIN:
+                        throw new RuntimeException("Data solo con keyboard");
+                    case DATA_CONSEGNA_MAX:
+                        throw new RuntimeException("Data solo con keyboard");
+                    default:
+                        throw new RuntimeException("Filtro non gestito: " + filtroRicerca);
+                }
+
+                userCriteria.put(chatId, criteria);
+                userState.put(chatId, null);
+
+                execute(sendInlineKeyBoard(chatId, "Criterio \"" + stato + "\" impostato a: " + testo, TipoKeyboard.FILTRI));
+            } else {
+                execute(creaSendMessage(chatId, testo, true));
+            }
+        }
+    }
+
+    private void ricerca(Long chatId) throws TelegramApiException {
+        SearchCriteria criteria = userCriteria.getOrDefault(chatId, new SearchCriteria());
+        execute(creaSendMessage(chatId, "Avvio ricerca con criteri: " + criteria, false));
+        List<Show> shows = new ArrayList<>();
+        if (ObjectUtils.isEmpty(criteria.getFonte())
+                || !criteria.getFonte().equals(Fonti.COLOSSEO_NEWS.name())) {
+            shows = ricercheRepository.cercaShow(criteria);
+        }
+        List<News> news = new ArrayList<>();
+        if (ObjectUtils.isEmpty(criteria.getFonte())
+                || criteria.getFonte().equals(Fonti.COLOSSEO_NEWS.name())) {
+            news = ricercheRepository.cercaNews(criteria);
+        }
+        int tot = shows.size() + news.size();
+        if (tot > 25) {
+            execute(creaSendMessage(chatId, "Restringere la ricerca. Troppi elementi: " + tot, false));
+        } else if (tot == 0) {
+            execute(creaSendMessage(chatId, "Nessun elemento trovato ", false));
+        } else {
+            for (Show show : shows) {
+                sendImageToChat(show.getImg(), show.toString() + "\n[ consegnato il: " + show.getDataConsegna() + " ]");
+            }
+            for (News el : news) {
+                inviaMessaggio(el.toString() + "\n[ consegnato il: " + el.getDataConsegna() + " ]");
+            }
+        }
+        execute(sendInlineKeyBoard(chatId, "Componi e ricerca", TipoKeyboard.FILTRI));
+    }
+
+    private void handleCallback(CallbackQuery callback) throws TelegramApiException {
+        Long chatId = callback.getMessage().getChatId();
+        String data = callback.getData();
+        String stato = userState.get(chatId);
+        SearchCriteria criteria = userCriteria.getOrDefault(chatId, new SearchCriteria());
+        if (stato == null) {
+            if (data.startsWith(TOKEN_CANCELLA)) {
+                data = data.substring(TOKEN_CANCELLA.length());
+                SearchCriteria.FiltriRicerca filtroRicerca = SearchCriteria.FiltriRicerca.valueOf(data);
+                switch (filtroRicerca) {
+                    case TESTO:
+                        criteria.setTesto(null);
+                        break;
+                    case FONTE:
+                        criteria.setFonte(null);
+                        break;
+                    case DATA_MIN:
+                        criteria.setDataMin("2020-01-01");
+                        break;
+                    case DATA_MAX:
+                        criteria.setDataMax("2050-01-01");
+                        break;
+                    case DATA_CONSEGNA_MIN:
+                        criteria.setDataConsegnaMin("2020-01-01");
+                        break;
+                    case DATA_CONSEGNA_MAX:
+                        criteria.setDataConsegnaMax("2050-01-01");
+                        break;
+                    default:
+                        throw new RuntimeException("Filtro non gestito: " + filtroRicerca);
+                }
+                userCriteria.put(chatId, criteria);
+                userState.put(chatId, null);
+
+                execute(sendInlineKeyBoard(chatId, "Criterio \"" + filtroRicerca + "\" resettato.", TipoKeyboard.FILTRI));
+            } else {
+                if (data.equals(TOKEN_RICERCA)) {
+                    ricerca(chatId);
+                } else if (data.startsWith(TOKEN_ANNO)) {
+                    execute(sendInlineKeyBoard(chatId, data.substring(TOKEN_ANNO.length()), TipoKeyboard.ANNI));
+                } else if (data.startsWith(TOKEN_MESE)) {
+                    execute(sendInlineKeyBoard(chatId, data.substring(TOKEN_MESE.length()), TipoKeyboard.MESI));
+                } else if (data.startsWith(TOKEN_GIORNO)) {
+                    execute(sendInlineKeyBoard(chatId, data.substring(TOKEN_GIORNO.length()), TipoKeyboard.GIORNI));
+
+                } else if (data.startsWith(TOKEN_DATA)) {
+                    data = data.substring(TOKEN_DATA.length());
+                    if (data.startsWith(TOKEN_ANNO)) {
+                        updateData(data, chatId, TOKEN_ANNO);
+                    } else if (data.startsWith(TOKEN_MESE)) {
+                        updateData(data, chatId, TOKEN_MESE);
+                    } else if (data.startsWith(TOKEN_GIORNO)) {
+                        updateData(data, chatId, TOKEN_GIORNO);
+                    } else {
+                        throw new RuntimeException("Stato inconsistente");
+                    }
+
+                } else {
+                    SearchCriteria.FiltriRicerca filtroRicerca = SearchCriteria.FiltriRicerca.valueOf(data);
+                    userState.put(chatId, filtroRicerca.name());
+                    switch (filtroRicerca) {
+                        case TESTO:
+                            execute(creaSendMessage(chatId, "Inserisci il testo da cercare:", false));
+                            break;
+                        case FONTE:
+                            execute(sendInlineKeyBoard(chatId, "Fonti", TipoKeyboard.FONTI));
+                            break;
+                        case DATA_MIN:
+                            throw new RuntimeException("Data in un case diverso");
+                        case DATA_MAX:
+                            throw new RuntimeException("Data in un case diverso");
+                        case DATA_CONSEGNA_MIN:
+                            throw new RuntimeException("Data in un case diverso");
+                        case DATA_CONSEGNA_MAX:
+                            throw new RuntimeException("Data in un case diverso");
+                        default:
+                            throw new RuntimeException("Filtro non gestito: " + filtroRicerca);
+                    }
+                }
+            }
+        } else if (stato.equals(SearchCriteria.FiltriRicerca.FONTE.name())) {
+            criteria.setFonte(data);
+            userCriteria.put(chatId, criteria);
+            userState.put(chatId, null);
+            execute(sendInlineKeyBoard(chatId, "Criterio \"" + stato + "\" impostato a: " + data, TipoKeyboard.FILTRI));
+        } else {
+            throw new RuntimeException("Situazione inconsistente: " + stato);
+        }
+    }
+
+    private void updateData(String data, Long chatId, String tokenElemData) throws TelegramApiException {
+        data = data.substring(tokenElemData.length());
+        SearchCriteria criteria = userCriteria.getOrDefault(chatId, new SearchCriteria());
+        String[] split = data.split(TOKEN);
+        SearchCriteria.FiltriRicerca filtroRicerca = SearchCriteria.FiltriRicerca.valueOf(split[0]);
+        String extractCriteria = extractCriteria(criteria, filtroRicerca);
+        LocalDate date = LocalDate.parse(extractCriteria, FORMATTER_SIMPLE);
+        switch (tokenElemData) {
+            case TOKEN_ANNO:
+                date = date.withYear(Integer.parseInt(split[1]));
+                break;
+            case TOKEN_MESE:
+                date = date.withMonth(Integer.parseInt(split[1]));
+                break;
+            case TOKEN_GIORNO:
+                date = date.withDayOfMonth(Integer.parseInt(split[1]));
+                break;
+            default:
+                throw new RuntimeException("Situazione inconsistente");
+        }
+        String value = date.format(FORMATTER_SIMPLE);
+        switch (filtroRicerca) {
+            case DATA_MIN:
+                criteria.setDataMin(value);
+                break;
+            case DATA_MAX:
+                criteria.setDataMax(value);
+                break;
+            case DATA_CONSEGNA_MIN:
+                criteria.setDataConsegnaMin(value);
+                break;
+            case DATA_CONSEGNA_MAX:
+                criteria.setDataConsegnaMax(value);
+                break;
+            default:
+                throw new RuntimeException("Filtro non gestito: " + filtroRicerca);
+        }
+        userCriteria.put(chatId, criteria);
+        userState.put(chatId, null);
+        execute(sendInlineKeyBoard(chatId, "Criterio \"" + filtroRicerca.name() + "\" impostato a: " + value, TipoKeyboard.FILTRI));
+    }
+
+    private SendMessage creaSendMessage(long chatId, String msg, boolean bReply) {
+        SendMessage sendMessage = new SendMessage();
+        sendMessage.enableHtml(true);
+        sendMessage.setParseMode("html");
+        sendMessage.setChatId(Long.toString(chatId));
+        String messaggio = "";
+        StringBuilder rep = new StringBuilder();
+        if (bReply) {
+            for (int i = 0; i < msg.length(); i++) {
+                rep.append("\\u").append(Integer.toHexString(msg.charAt(i)).toUpperCase());
+            }
+            rep.append(" ");
+
+            rep.append(" --> ");
+            byte[] bytes = msg.getBytes();
+            for (byte aByte : bytes) {
+                rep.append(aByte).append(",");
+            }
+            messaggio = "<b>sono il bot reply</b> per  " + chatId;
+        }
+        messaggio = messaggio + "\n" + msg;
+        if (bReply) {
+            messaggio = messaggio + "\n" + rep;
+        }
+        sendMessage.setText(messaggio);
+        return sendMessage;
+    }
+
+    private SendMessage sendInlineKeyBoard(long chatId, String testo, TipoKeyboard tipoKeyboard) {
+        InlineKeyboardMarkup inlineKeyboardMarkup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboards;
+        switch (tipoKeyboard) {
+            case FILTRI:
+                keyboards = generaElencoFiltri(userCriteria.getOrDefault(chatId, new SearchCriteria()));
+                break;
+            case FONTI:
+                keyboards = generaElencoFonti();
+                break;
+            case ANNI:
+                keyboards = generaAnni(testo);
+                break;
+            case MESI:
+                keyboards = generaMesi(testo);
+                break;
+            case GIORNI:
+                keyboards = generaGiorni(testo);
+                break;
+            default:
+                throw new RuntimeException("Tipi Keyboard non gestito: " + tipoKeyboard);
+        }
 
 
-    
+        SendMessage sendMessage = new SendMessage();
+        sendMessage.enableHtml(true);
+        sendMessage.setParseMode("html");
+        sendMessage.setChatId(Long.toString(chatId));
+        sendMessage.setText(testo);
+        inlineKeyboardMarkup.setKeyboard(keyboards);
+        sendMessage.setReplyMarkup(inlineKeyboardMarkup);
+        return sendMessage;
+    }
+
+    private List<List<InlineKeyboardButton>> generaElencoFiltri(SearchCriteria criteria) {
+        try {
+            List<List<InlineKeyboardButton>> righe = new ArrayList<>();
+            for (SearchCriteria.FiltriRicerca filtroRicerca : SearchCriteria.FiltriRicerca.values()) {
+                List<InlineKeyboardButton> elemInRiga = new ArrayList<>();
+                String extractCriteria = extractCriteria(criteria, filtroRicerca);
+                if (filtroRicerca == SearchCriteria.FiltriRicerca.DATA_MIN
+                        || filtroRicerca == SearchCriteria.FiltriRicerca.DATA_MAX
+                        || filtroRicerca == SearchCriteria.FiltriRicerca.DATA_CONSEGNA_MIN
+                        || filtroRicerca == SearchCriteria.FiltriRicerca.DATA_CONSEGNA_MAX) {
+                    LocalDate date = LocalDate.parse(extractCriteria, FORMATTER_SIMPLE);
+                    InlineKeyboardButton inlineKeyboardButton = new InlineKeyboardButton();
+                    //TITOLO
+                    inlineKeyboardButton.setText(filtroRicerca.name());
+                    inlineKeyboardButton.setCallbackData(filtroRicerca.name());
+                    elemInRiga.add(inlineKeyboardButton);
+                    righe.add(elemInRiga);
+                    elemInRiga = new ArrayList<>();
+                    //ANNO
+                    inlineKeyboardButton = new InlineKeyboardButton();
+                    inlineKeyboardButton.setText(String.valueOf(date.getYear()));
+                    inlineKeyboardButton.setCallbackData(TOKEN_ANNO + filtroRicerca.name());
+                    elemInRiga.add(inlineKeyboardButton);
+                    //MESE
+                    inlineKeyboardButton = new InlineKeyboardButton();
+                    inlineKeyboardButton.setText(String.valueOf(date.getMonth()));
+                    inlineKeyboardButton.setCallbackData(TOKEN_MESE + filtroRicerca.name());
+                    elemInRiga.add(inlineKeyboardButton);
+                    inlineKeyboardButton = new InlineKeyboardButton();
+                    //GIORNO
+                    inlineKeyboardButton.setText(String.valueOf(date.getDayOfMonth()));
+                    inlineKeyboardButton.setCallbackData(TOKEN_GIORNO + filtroRicerca.name());
+                    elemInRiga.add(inlineKeyboardButton);
+                    righe.add(elemInRiga);
+                } else {
+                    InlineKeyboardButton inlineKeyboardButton = new InlineKeyboardButton();
+                    inlineKeyboardButton.setText(filtroRicerca.name() + ": " + extractCriteria);
+                    inlineKeyboardButton.setCallbackData(filtroRicerca.name());
+                    elemInRiga.add(inlineKeyboardButton);
+                    inlineKeyboardButton = new InlineKeyboardButton();
+                    inlineKeyboardButton.setText("\uD83D\uDDD1");
+                    inlineKeyboardButton.setCallbackData(TOKEN_CANCELLA + filtroRicerca.name());
+                    elemInRiga.add(inlineKeyboardButton);
+                    righe.add(elemInRiga);
+                }
+            }
+
+            List<InlineKeyboardButton> keyboardButtonsRow1 = new ArrayList<>();
+            InlineKeyboardButton inlineKeyboardButton = new InlineKeyboardButton();
+            inlineKeyboardButton.setText("RICERCA");
+            inlineKeyboardButton.setCallbackData(TOKEN_RICERCA);
+            keyboardButtonsRow1.add(inlineKeyboardButton);
+            righe.add(keyboardButtonsRow1);
+
+
+            return righe;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private List<List<InlineKeyboardButton>> generaElencoFonti() {
+        try {
+            List<List<InlineKeyboardButton>> rowList = new ArrayList<>();
+            for (Fonti fonte : Fonti.values()) {
+                List<InlineKeyboardButton> keyboardButtonsRow1 = new ArrayList<>();
+                InlineKeyboardButton inlineKeyboardButton = new InlineKeyboardButton();
+                inlineKeyboardButton.setText(fonte.name());
+                inlineKeyboardButton.setCallbackData(fonte.name());
+                keyboardButtonsRow1.add(inlineKeyboardButton);
+                rowList.add(keyboardButtonsRow1);
+            }
+            return rowList;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private List<List<InlineKeyboardButton>> generaAnni(String campo) {
+        try {
+            List<List<InlineKeyboardButton>> righe = new ArrayList<>();
+            List<InlineKeyboardButton> elemInRiga = new ArrayList<>();
+            for (int i = 2021; i <= 2030; i++) {
+                InlineKeyboardButton inlineKeyboardButton = new InlineKeyboardButton();
+                inlineKeyboardButton.setText(String.valueOf(i));
+                inlineKeyboardButton.setCallbackData(TOKEN_DATA + TOKEN_ANNO + campo + TOKEN + i);
+                elemInRiga.add(inlineKeyboardButton);
+                if (elemInRiga.size() == 5) {
+                    righe.add(elemInRiga);
+                    elemInRiga = new ArrayList<>();
+                }
+            }
+            righe.add(elemInRiga);
+            return righe;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private List<List<InlineKeyboardButton>> generaMesi(String campo) {
+        try {
+            List<List<InlineKeyboardButton>> righe = new ArrayList<>();
+            List<InlineKeyboardButton> elemInRiga = new ArrayList<>();
+            for (int i = 1; i <= 12; i++) {
+                InlineKeyboardButton inlineKeyboardButton = new InlineKeyboardButton();
+                inlineKeyboardButton.setText(LocalDate.of(2021, i, 1).getMonth().name());
+                inlineKeyboardButton.setCallbackData(TOKEN_DATA + TOKEN_MESE + campo + TOKEN + i);
+                elemInRiga.add(inlineKeyboardButton);
+                if (elemInRiga.size() == 4) {
+                    righe.add(elemInRiga);
+                    elemInRiga = new ArrayList<>();
+                }
+            }
+            righe.add(elemInRiga);
+            return righe;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private List<List<InlineKeyboardButton>> generaGiorni(String campo) {
+        try {
+            List<List<InlineKeyboardButton>> righe = new ArrayList<>();
+            List<InlineKeyboardButton> elemInRiga = new ArrayList<>();
+            for (int i = 1; i <= 31; i++) {
+                InlineKeyboardButton inlineKeyboardButton = new InlineKeyboardButton();
+                inlineKeyboardButton.setText(String.valueOf(i));
+                inlineKeyboardButton.setCallbackData(TOKEN_DATA + TOKEN_GIORNO + campo + TOKEN + i);
+                elemInRiga.add(inlineKeyboardButton);
+                if (elemInRiga.size() == 6) {
+                    righe.add(elemInRiga);
+                    elemInRiga = new ArrayList<>();
+                }
+            }
+            righe.add(elemInRiga);
+            return righe;
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private String extractCriteria(SearchCriteria criteria, SearchCriteria.FiltriRicerca filtroRicerca) {
+        String ret;
+        switch (filtroRicerca) {
+            case TESTO:
+                ret = criteria.getTesto();
+                break;
+            case FONTE:
+                ret = criteria.getFonte();
+                break;
+            case DATA_MIN:
+                ret = criteria.getDataMin();
+                break;
+            case DATA_MAX:
+                ret = criteria.getDataMax();
+                break;
+            case DATA_CONSEGNA_MIN:
+                ret = criteria.getDataConsegnaMin();
+                break;
+            case DATA_CONSEGNA_MAX:
+                ret = criteria.getDataConsegnaMax();
+                break;
+            default:
+                throw new RuntimeException("Filtro non gestito: " + filtroRicerca);
+        }
+        return ret == null ? "" : ret;
+    }
+
+    @PostConstruct
+    public JobConfig inizializza() throws Exception {
+
+        TelegramBotsApi telegramBotsApi = new TelegramBotsApi(DefaultBotSession.class);
+        jobConfigBot = this;
+        registerBot = telegramBotsApi.registerBot(jobConfigBot);
+        return jobConfigBot;
+    }
+
+
+    Map<String, Integer> totShows;
+    Map<String, Integer> totNewShows;
+    int messaggiInviati;
+    private List<News> listNews;
+    private List<Show> listShow;
+    int posizioneNews;
+    int posizioneShow;
+    String esito;
+    List<String> skipped;
+
+    JobConfig jobConfigBot;
+    private BotSession registerBot;
+
+
+    private final Map<Long, String> userState = new HashMap<>();
+    private final Map<Long, SearchCriteria> userCriteria = new HashMap<>();
+
+    public enum TipoKeyboard {FILTRI, FONTI, ANNI, MESI, GIORNI}
+
+    public enum Fonti {CONCORDIA, DICE, TICKETONE, TICKETMASTER, VIVATICKET, MAILTICKET, COLOSSEO, COLOSSEO_NEWS}
+
+    DateTimeFormatter FORMATTER_SIMPLE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
 
 }

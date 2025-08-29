@@ -9,20 +9,21 @@ import javax.persistence.Id;
 
 @Entity
 public class News {
-	public News() {
-		super();
-	}
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private int id;
+	private String titolo;
+	private String des;
+	private LocalDateTime dataConsegna;
+	public News() {
+		super();
+	}
 	public News(String titolo, String des) {
 		super();
 		this.titolo = titolo;
 		this.des = des;
 	}
-	private String titolo;
-	private String des;
-	private LocalDateTime dataConsegna;
+
 	public int getId() {
 		return id;
 	}

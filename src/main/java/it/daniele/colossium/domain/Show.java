@@ -10,13 +10,23 @@ import javax.persistence.Id;
 
 @Entity
 public class Show {
-	public Show() {
-		super();
-	}
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
 	private int id;
-	public Show(String data, String titolo, String img, String href, String des, String fonte, String from) {
+	private String img;
+	private String des;
+	private String data;
+	private LocalDateTime localData;
+    private String titolo;
+	private String fonte;
+	@Column(name = "da")
+	private String from;
+	private String href;
+	private LocalDateTime dataConsegna;
+	public Show() {
+		super();
+	}
+	public Show(String data, String titolo, String img, String href, String des, String fonte, String from, LocalDateTime localData) {
 		super();
 		this.data = data;
 		this.setDes(des);
@@ -25,16 +35,17 @@ public class Show {
 		this.fonte=fonte;
 		this.href = href;
 		this.from = from;
+        this.localData=localData;
 	}
-	private String img;
-	private String des;
-	private String data;
-	private String titolo;
-	private String fonte;
-	@Column(name = "da")
-	private String from;
-	private String href;
-	private LocalDateTime dataConsegna;
+
+    public LocalDateTime getLocalData() {
+        return localData;
+    }
+
+    public void setLocalData(LocalDateTime localData) {
+        this.localData = localData;
+    }
+
 	public int getId() {
 		return id;
 	}
