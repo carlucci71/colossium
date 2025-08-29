@@ -69,5 +69,5 @@ public class SearchCriteria {
         return sb.toString();
     }
 
-    public enum FiltriRicerca {TESTO, FONTE, DATA_MIN, DATA_MAX, DATA_CONSEGNA_MIN, DATA_CONSEGNA_MAX}
+    public enum FiltriRicerca {TESTO, FONTE, DATA_MIN, DATA_MAX, DATA_CONSEGNA_MIN, DATA_CONSEGNA_MAX, LIMIT}
 }

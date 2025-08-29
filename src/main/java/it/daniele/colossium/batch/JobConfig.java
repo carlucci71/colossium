@@ -82,6 +82,7 @@ public class JobConfig extends TelegramLongPollingBot {
     public static final String TOKEN_GIORNO = "#GIORNO#";
     public static final String TOKEN_CANCELLA = "#CANCELLA#";
     public static final String TOKEN_RICERCA = "#RICERCA#";
+    public static final Integer LIMIT_DEFAULT = 25;
 
     JobConfig() {
         super(ConstantColossium.BOT_TOKEN);
@@ -1013,6 +1014,7 @@ public class JobConfig extends TelegramLongPollingBot {
 
         if (testo.equals("/componi")) {
             userState.remove(chatId);
+            userLimit.put(chatId, LIMIT_DEFAULT);
             userCriteria.remove(chatId);
             execute(sendInlineKeyBoard(chatId, testo, TipoKeyboard.FILTRI));
         } else if (testo.equals("/ricerca")) {
@@ -1024,6 +1026,9 @@ public class JobConfig extends TelegramLongPollingBot {
                 switch (filtroRicerca) {
                     case TESTO:
                         criteria.setTesto(testo);
+                        break;
+                    case LIMIT:
+                        userLimit.put(chatId,Integer.parseInt(testo));
                         break;
                     case FONTE:
                         throw new RuntimeException("Fonte solo con keyboard");
@@ -1063,7 +1068,7 @@ public class JobConfig extends TelegramLongPollingBot {
             news = ricercheRepository.cercaNews(criteria);
         }
         int tot = shows.size() + news.size();
-        if (tot > 25) {
+        if (tot > userLimit.get(chatId)) {
             execute(creaSendMessage(chatId, "Restringere la ricerca. Troppi elementi: " + tot, false));
         } else if (tot == 0) {
             execute(creaSendMessage(chatId, "Nessun elemento trovato ", false));
@@ -1106,6 +1111,9 @@ public class JobConfig extends TelegramLongPollingBot {
                     case DATA_CONSEGNA_MAX:
                         criteria.setDataConsegnaMax("2050-01-01");
                         break;
+                    case LIMIT:
+                        userLimit.put(chatId, LIMIT_DEFAULT);
+                        break;
                     default:
                         throw new RuntimeException("Filtro non gestito: " + filtroRicerca);
                 }
@@ -1145,14 +1153,21 @@ public class JobConfig extends TelegramLongPollingBot {
                         case FONTE:
                             execute(sendInlineKeyBoard(chatId, "Fonti", TipoKeyboard.FONTI));
                             break;
+                        case LIMIT:
+                            execute(creaSendMessage(chatId, "Inserisci il nuovo limite:", false));
+                            break;
                         case DATA_MIN:
-                            throw new RuntimeException("Data in un case diverso");
+                            userState.put(chatId, null);
+                            break;
                         case DATA_MAX:
-                            throw new RuntimeException("Data in un case diverso");
+                            userState.put(chatId, null);
+                            break;
                         case DATA_CONSEGNA_MIN:
-                            throw new RuntimeException("Data in un case diverso");
+                            userState.put(chatId, null);
+                            break;
                         case DATA_CONSEGNA_MAX:
-                            throw new RuntimeException("Data in un case diverso");
+                            userState.put(chatId, null);
+                            break;
                         default:
                             throw new RuntimeException("Filtro non gestito: " + filtroRicerca);
                     }
@@ -1173,7 +1188,7 @@ public class JobConfig extends TelegramLongPollingBot {
         SearchCriteria criteria = userCriteria.getOrDefault(chatId, new SearchCriteria());
         String[] split = data.split(TOKEN);
         SearchCriteria.FiltriRicerca filtroRicerca = SearchCriteria.FiltriRicerca.valueOf(split[0]);
-        String extractCriteria = extractCriteria(criteria, filtroRicerca);
+        String extractCriteria = extractCriteria(criteria, filtroRicerca, chatId);
         LocalDate date = LocalDate.parse(extractCriteria, FORMATTER_SIMPLE);
         switch (tokenElemData) {
             case TOKEN_ANNO:
@@ -1243,7 +1258,7 @@ public class JobConfig extends TelegramLongPollingBot {
         List<List<InlineKeyboardButton>> keyboards;
         switch (tipoKeyboard) {
             case FILTRI:
-                keyboards = generaElencoFiltri(userCriteria.getOrDefault(chatId, new SearchCriteria()));
+                keyboards = generaElencoFiltri(userCriteria.getOrDefault(chatId, new SearchCriteria()), chatId);
                 break;
             case FONTI:
                 keyboards = generaElencoFonti();
@@ -1272,12 +1287,12 @@ public class JobConfig extends TelegramLongPollingBot {
         return sendMessage;
     }
 
-    private List<List<InlineKeyboardButton>> generaElencoFiltri(SearchCriteria criteria) {
+    private List<List<InlineKeyboardButton>> generaElencoFiltri(SearchCriteria criteria, Long chatId) {
         try {
             List<List<InlineKeyboardButton>> righe = new ArrayList<>();
             for (SearchCriteria.FiltriRicerca filtroRicerca : SearchCriteria.FiltriRicerca.values()) {
                 List<InlineKeyboardButton> elemInRiga = new ArrayList<>();
-                String extractCriteria = extractCriteria(criteria, filtroRicerca);
+                String extractCriteria = extractCriteria(criteria, filtroRicerca, chatId);
                 if (filtroRicerca == SearchCriteria.FiltriRicerca.DATA_MIN
                         || filtroRicerca == SearchCriteria.FiltriRicerca.DATA_MAX
                         || filtroRicerca == SearchCriteria.FiltriRicerca.DATA_CONSEGNA_MIN
@@ -1413,7 +1428,7 @@ public class JobConfig extends TelegramLongPollingBot {
         }
     }
 
-    private String extractCriteria(SearchCriteria criteria, SearchCriteria.FiltriRicerca filtroRicerca) {
+    private String extractCriteria(SearchCriteria criteria, SearchCriteria.FiltriRicerca filtroRicerca, Long chatId) {
         String ret;
         switch (filtroRicerca) {
             case TESTO:
@@ -1433,6 +1448,9 @@ public class JobConfig extends TelegramLongPollingBot {
                 break;
             case DATA_CONSEGNA_MAX:
                 ret = criteria.getDataConsegnaMax();
+                break;
+            case LIMIT:
+                ret = userLimit.get(chatId).toString();
                 break;
             default:
                 throw new RuntimeException("Filtro non gestito: " + filtroRicerca);
@@ -1465,6 +1483,7 @@ public class JobConfig extends TelegramLongPollingBot {
 
 
     private final Map<Long, String> userState = new HashMap<>();
+    private final Map<Long, Integer> userLimit = new HashMap<>();
     private final Map<Long, SearchCriteria> userCriteria = new HashMap<>();
 
     public enum TipoKeyboard {FILTRI, FONTI, ANNI, MESI, GIORNI}
