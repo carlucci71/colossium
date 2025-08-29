@@ -1028,7 +1028,7 @@ public class JobConfig extends TelegramLongPollingBot {
                         criteria.setTesto(testo);
                         break;
                     case LIMIT:
-                        userLimit.put(chatId,Integer.parseInt(testo));
+                        userLimit.put(chatId, Integer.parseInt(testo));
                         break;
                     case FONTE:
                         throw new RuntimeException("Fonte solo con keyboard");
@@ -1087,7 +1087,11 @@ public class JobConfig extends TelegramLongPollingBot {
         Long chatId = callback.getMessage().getChatId();
         String data = callback.getData();
         String stato = userState.get(chatId);
-        SearchCriteria criteria = userCriteria.getOrDefault(chatId, new SearchCriteria());
+        SearchCriteria criteria = userCriteria.get(chatId);
+        if (criteria == null) {
+            criteria = new SearchCriteria();
+            userCriteria.put(chatId, criteria);
+        }
         if (stato == null) {
             if (data.startsWith(TOKEN_CANCELLA)) {
                 data = data.substring(TOKEN_CANCELLA.length());
@@ -1146,6 +1150,7 @@ public class JobConfig extends TelegramLongPollingBot {
                 } else {
                     SearchCriteria.FiltriRicerca filtroRicerca = SearchCriteria.FiltriRicerca.valueOf(data);
                     userState.put(chatId, filtroRicerca.name());
+                    String now = LocalDate.now().format(FORMATTER_SIMPLE);
                     switch (filtroRicerca) {
                         case TESTO:
                             execute(creaSendMessage(chatId, "Inserisci il testo da cercare:", false));
@@ -1157,15 +1162,23 @@ public class JobConfig extends TelegramLongPollingBot {
                             execute(creaSendMessage(chatId, "Inserisci il nuovo limite:", false));
                             break;
                         case DATA_MIN:
+                            criteria.setDataMin(now);
+                            execute(sendInlineKeyBoard(chatId, "Criterio \"" + filtroRicerca.name() + "\" impostato a: " + now, TipoKeyboard.FILTRI));
                             userState.put(chatId, null);
                             break;
                         case DATA_MAX:
+                            criteria.setDataMax(now);
+                            execute(sendInlineKeyBoard(chatId, "Criterio \"" + filtroRicerca.name() + "\" impostato a: " + now, TipoKeyboard.FILTRI));
                             userState.put(chatId, null);
                             break;
                         case DATA_CONSEGNA_MIN:
+                            criteria.setDataConsegnaMin(now);
+                            execute(sendInlineKeyBoard(chatId, "Criterio \"" + filtroRicerca.name() + "\" impostato a: " + now, TipoKeyboard.FILTRI));
                             userState.put(chatId, null);
                             break;
                         case DATA_CONSEGNA_MAX:
+                            criteria.setDataConsegnaMax(now);
+                            execute(sendInlineKeyBoard(chatId, "Criterio \"" + filtroRicerca.name() + "\" impostato a: " + now, TipoKeyboard.FILTRI));
                             userState.put(chatId, null);
                             break;
                         default:
