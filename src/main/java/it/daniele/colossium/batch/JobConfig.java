@@ -990,7 +990,7 @@ public class JobConfig extends TelegramLongPollingBot {
                                 userState.put(chatId, null);
                             }
                         } catch (NumberFormatException e) {
-                            cancellare=false;
+                            cancellare = false;
                             Message msgValoreNumerico = execute(creaSendMessage(chatId, "Inserire un valore numerico "));
                             msgForDelete.add(msgValoreNumerico.getMessageId());
                         }
@@ -1035,7 +1035,8 @@ public class JobConfig extends TelegramLongPollingBot {
                 inviaMessaggio(el.toString() + "\n[ consegnato il: " + el.getDataConsegna() + " ]");
             }
         }
-        execute(sendInlineKeyBoard(chatId, "Componi e ricerca", TipoKeyboard.FILTRI));
+        Message msgFiltri = execute(sendInlineKeyBoard(chatId, "Componi e ricerca", TipoKeyboard.FILTRI));
+        userMessageIdOld.put(chatId, msgFiltri.getMessageId());
     }
 
     private void handleCallback(CallbackQuery callback) throws TelegramApiException {
@@ -1109,14 +1110,16 @@ public class JobConfig extends TelegramLongPollingBot {
                     ricerca(chatId);
                 } else if (data.startsWith(TOKEN_ANNO)) {
                     String tipoRicerca = data.substring(TOKEN_ANNO.length());
-                    execute(sendInlineKeyBoard(chatId, SearchCriteria.FiltriRicerca.valueOf(tipoRicerca).getDes(), TipoKeyboard.ANNI, tipoRicerca));
+                    Message msgAnni = execute(sendInlineKeyBoard(chatId, SearchCriteria.FiltriRicerca.valueOf(tipoRicerca).getDes(), TipoKeyboard.ANNI, tipoRicerca));
+                    userMessageIdForDelete.computeIfAbsent(chatId, k -> new ArrayList<>()).add(msgAnni.getMessageId());
                 } else if (data.startsWith(TOKEN_MESE)) {
                     String tipoRicerca = data.substring(TOKEN_MESE.length());
-                    execute(sendInlineKeyBoard(chatId, SearchCriteria.FiltriRicerca.valueOf(tipoRicerca).getDes(), TipoKeyboard.MESI, tipoRicerca));
+                    Message msgMesi = execute(sendInlineKeyBoard(chatId, SearchCriteria.FiltriRicerca.valueOf(tipoRicerca).getDes(), TipoKeyboard.MESI, tipoRicerca));
+                    userMessageIdForDelete.computeIfAbsent(chatId, k -> new ArrayList<>()).add(msgMesi.getMessageId());
                 } else if (data.startsWith(TOKEN_GIORNO)) {
                     String tipoRicerca = data.substring(TOKEN_GIORNO.length());
-                    execute(sendInlineKeyBoard(chatId, SearchCriteria.FiltriRicerca.valueOf(tipoRicerca).getDes(), TipoKeyboard.GIORNI, tipoRicerca));
-
+                    Message msgGiorni = execute(sendInlineKeyBoard(chatId, SearchCriteria.FiltriRicerca.valueOf(tipoRicerca).getDes(), TipoKeyboard.GIORNI, tipoRicerca));
+                    userMessageIdForDelete.computeIfAbsent(chatId, k -> new ArrayList<>()).add(msgGiorni.getMessageId());
                 } else if (data.startsWith(TOKEN_DATA)) {
                     data = data.substring(TOKEN_DATA.length());
                     if (data.startsWith(TOKEN_ANNO)) {
@@ -1135,16 +1138,17 @@ public class JobConfig extends TelegramLongPollingBot {
                     String now = LocalDate.now().format(FORMATTER_SIMPLE);
                     switch (filtroRicerca) {
                         case TESTO:
-                            userMessageIdOld.put(chatId, messageId);
+                          //  userMessageIdOld.put(chatId, messageId);
                             Message msgTestDaCercare = execute(creaSendMessage(chatId, "Inserisci il testo da cercare:"));
                             userMessageIdForDelete.computeIfAbsent(chatId, k -> new ArrayList<>()).add(msgTestDaCercare.getMessageId());
 
                             break;
                         case FONTE:
-                            execute(sendInlineKeyBoard(chatId, "Fonti", TipoKeyboard.FONTI));
+                            Message msgFonti = execute(sendInlineKeyBoard(chatId, "Fonti", TipoKeyboard.FONTI));
+                            userMessageIdForDelete.computeIfAbsent(chatId, k -> new ArrayList<>()).add(msgFonti.getMessageId());
                             break;
                         case LIMIT:
-                            userMessageIdOld.put(chatId, messageId);
+                            //userMessageIdOld.put(chatId, messageId);
                             Message msgNuovoLimite = execute(creaSendMessage(chatId, "Inserisci il nuovo limite:"));
                             userMessageIdForDelete.computeIfAbsent(chatId, k -> new ArrayList<>()).add(msgNuovoLimite.getMessageId());
                             break;
@@ -1182,10 +1186,13 @@ public class JobConfig extends TelegramLongPollingBot {
                 }
             }
         } else if (stato.equals(SearchCriteria.FiltriRicerca.FONTE.name())) {
-            criteria.setFonte(data);
-            userCriteria.put(chatId, criteria);
+            if (!data.equals(criteria.getFonte())) {
+                criteria.setFonte(data);
+                aggiornaTastiera(chatId, userMessageIdOld.get(chatId), generaElencoFiltri(criteria, chatId));
+                userCriteria.put(chatId, criteria);
+            }
+            cancellaMessaggi(chatId);
             userState.put(chatId, null);
-            execute(sendInlineKeyBoard(chatId, "Criterio \"" + stato + "\" impostato a: " + data, TipoKeyboard.FILTRI));
         } else {
             throw new RuntimeException("Situazione inconsistente: " + stato);
         }
@@ -1211,26 +1218,43 @@ public class JobConfig extends TelegramLongPollingBot {
             default:
                 throw new RuntimeException("Situazione inconsistente");
         }
-        String value = date.format(FORMATTER_SIMPLE);
+        String newDate = date.format(FORMATTER_SIMPLE);
+        boolean isChanged = false;
         switch (filtroRicerca) {
             case DATA_MIN:
-                criteria.setDataMin(value);
+                if (!criteria.getDataMin().equals(newDate)) {
+                    criteria.setDataMin(newDate);
+                    isChanged = true;
+                }
                 break;
             case DATA_MAX:
-                criteria.setDataMax(value);
+                if (!criteria.getDataMax().equals(newDate)) {
+                    criteria.setDataMax(newDate);
+                    isChanged = true;
+                }
                 break;
             case DATA_CONSEGNA_MIN:
-                criteria.setDataConsegnaMin(value);
+                if (!criteria.getDataConsegnaMin().equals(newDate)) {
+                    criteria.setDataConsegnaMin(newDate);
+                    isChanged = true;
+                }
                 break;
             case DATA_CONSEGNA_MAX:
-                criteria.setDataConsegnaMax(value);
+                if (!criteria.getDataConsegnaMax().equals(newDate)) {
+                    criteria.setDataConsegnaMax(newDate);
+                    isChanged = true;
+                }
                 break;
             default:
                 throw new RuntimeException("Filtro non gestito: " + filtroRicerca);
         }
         userCriteria.put(chatId, criteria);
         userState.put(chatId, null);
-        execute(sendInlineKeyBoard(chatId, "Criterio \"" + filtroRicerca.name() + "\" impostato a: " + value, TipoKeyboard.FILTRI));
+        if (isChanged) {
+            aggiornaTastiera(chatId, userMessageIdOld.get(chatId), generaElencoFiltri(criteria, chatId));
+        }
+        cancellaMessaggi(chatId);
+
     }
 
     private SendMessage creaSendMessage(long chatId, String msg) {
