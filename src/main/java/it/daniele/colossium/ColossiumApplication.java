@@ -16,10 +16,6 @@ public class ColossiumApplication {
 //        ScheduledConfig scheduledConfig = ctx.getBean(ScheduledConfig.class);
 //        scheduledConfig.runBatchJob();
 
-        JobConfig jobConfig= ctx.getBean(JobConfig.class);
-        for (JobConfig.Fonti fonte : JobConfig.Fonti.values()) {
-            jobConfig.gimmi(fonte);
-        }
 	}
 
 }
