@@ -1017,8 +1017,8 @@ public class JobConfig extends TelegramLongPollingBot {
             shows = ricercheRepository.cercaShow(criteria);
         }
         List<News> news = new ArrayList<>();
-        if (ObjectUtils.isEmpty(criteria.getFonte())
-                || criteria.getFonte().equals(Fonti.COLOSSEO_NEWS.name())) {
+        if (!ObjectUtils.isEmpty(criteria.getFonte())
+                && criteria.getFonte().equals(Fonti.COLOSSEO_NEWS.name())) {
             news = ricercheRepository.cercaNews(criteria);
         }
         int tot = shows.size() + news.size();
