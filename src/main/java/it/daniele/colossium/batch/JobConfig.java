@@ -29,6 +29,7 @@ import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
+import org.springframework.batch.item.ParseException;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
@@ -958,47 +959,59 @@ public class JobConfig extends TelegramLongPollingBot {
         if (testo.equals("/componi")) {
             userState.remove(chatId);
             userCriteria.remove(chatId);
-            execute(sendInlineKeyBoard(chatId, testo, TipoKeyboard.FILTRI));
+            userMessageIdForDelete.remove(chatId);
+            Message msgComponi = execute(sendInlineKeyBoard(chatId, testo, TipoKeyboard.FILTRI));
+            userMessageIdOld.put(chatId, msgComponi.getMessageId());
         } else if (testo.equals("/ricerca")) {
             ricerca(chatId);
         } else {
             String stato = userState.get(chatId);
             if (stato != null) {
                 SearchCriteria.FiltriRicerca filtroRicerca = SearchCriteria.FiltriRicerca.valueOf(stato);
+                boolean isChanged = false;
+                boolean cancellare = true;
+                List<Integer> msgForDelete = userMessageIdForDelete.computeIfAbsent(chatId, k -> new ArrayList<>());
                 switch (filtroRicerca) {
                     case TESTO:
-                        criteria.setTesto(testo);
+                        msgForDelete.add(message.getMessageId());
+                        if (!testo.equals(criteria.getTesto())) {
+                            criteria.setTesto(testo);
+                            isChanged = true;
+                        }
+                        userState.put(chatId, null);
                         break;
                     case LIMIT:
-                        criteria.setLimit(Integer.parseInt(testo));
+                        try {
+                            msgForDelete.add(message.getMessageId());
+                            Integer iTesto = Integer.parseInt(testo);
+                            if (!iTesto.equals(criteria.getLimit())) {
+                                criteria.setLimit(iTesto);
+                                isChanged = true;
+                                userState.put(chatId, null);
+                            }
+                        } catch (NumberFormatException e) {
+                            cancellare=false;
+                            Message msgValoreNumerico = execute(creaSendMessage(chatId, "Inserire un valore numerico "));
+                            msgForDelete.add(msgValoreNumerico.getMessageId());
+                        }
                         break;
-                    case FONTE:
-                        throw new RuntimeException("Fonte solo con keyboard");
-                    case DATA_MIN:
-                        throw new RuntimeException("Data solo con keyboard");
-                    case DATA_MAX:
-                        throw new RuntimeException("Data solo con keyboard");
-                    case DATA_CONSEGNA_MIN:
-                        throw new RuntimeException("Data solo con keyboard");
-                    case DATA_CONSEGNA_MAX:
-                        throw new RuntimeException("Data solo con keyboard");
                     default:
                         throw new RuntimeException("Filtro non gestito: " + filtroRicerca);
                 }
-
                 userCriteria.put(chatId, criteria);
-                userState.put(chatId, null);
-
-                execute(sendInlineKeyBoard(chatId, "Criterio \"" + stato + "\" impostato a: " + testo, TipoKeyboard.FILTRI));
-            } else {
-                execute(creaSendMessage(chatId, testo, true));
+                if (isChanged) {
+                    aggiornaTastiera(chatId, userMessageIdOld.get(chatId), generaElencoFiltri(criteria, chatId));
+                }
+                if (cancellare) {
+                    cancellaMessaggi(chatId);
+                }
             }
         }
     }
 
     private void ricerca(Long chatId) throws TelegramApiException {
         SearchCriteria criteria = userCriteria.getOrDefault(chatId, new SearchCriteria());
-        execute(creaSendMessage(chatId, "Avvio ricerca con criteri: " + criteria, false));
+        execute(creaSendMessage(chatId, "Avvio ricerca con criteri: " + criteria));
         List<Show> shows = new ArrayList<>();
         if (ObjectUtils.isEmpty(criteria.getFonte())
                 || !criteria.getFonte().equals(Fonti.COLOSSEO_NEWS.name())) {
@@ -1011,9 +1024,9 @@ public class JobConfig extends TelegramLongPollingBot {
         }
         int tot = shows.size() + news.size();
         if (tot > criteria.getLimit()) {
-            execute(creaSendMessage(chatId, "Restringere la ricerca. Troppi elementi: " + tot, false));
+            execute(creaSendMessage(chatId, "Restringere la ricerca. Troppi elementi: " + tot));
         } else if (tot == 0) {
-            execute(creaSendMessage(chatId, "Nessun elemento trovato ", false));
+            execute(creaSendMessage(chatId, "Nessun elemento trovato "));
         } else {
             for (Show show : shows) {
                 sendImageToChat(show.getImg(), show.toString() + "\n[ consegnato il: " + show.getDataConsegna() + " ]");
@@ -1095,11 +1108,14 @@ public class JobConfig extends TelegramLongPollingBot {
                 if (data.equals(TOKEN_RICERCA)) {
                     ricerca(chatId);
                 } else if (data.startsWith(TOKEN_ANNO)) {
-                    execute(sendInlineKeyBoard(chatId, data.substring(TOKEN_ANNO.length()), TipoKeyboard.ANNI));
+                    String tipoRicerca = data.substring(TOKEN_ANNO.length());
+                    execute(sendInlineKeyBoard(chatId, SearchCriteria.FiltriRicerca.valueOf(tipoRicerca).getDes(), TipoKeyboard.ANNI, tipoRicerca));
                 } else if (data.startsWith(TOKEN_MESE)) {
-                    execute(sendInlineKeyBoard(chatId, data.substring(TOKEN_MESE.length()), TipoKeyboard.MESI));
+                    String tipoRicerca = data.substring(TOKEN_MESE.length());
+                    execute(sendInlineKeyBoard(chatId, SearchCriteria.FiltriRicerca.valueOf(tipoRicerca).getDes(), TipoKeyboard.MESI, tipoRicerca));
                 } else if (data.startsWith(TOKEN_GIORNO)) {
-                    execute(sendInlineKeyBoard(chatId, data.substring(TOKEN_GIORNO.length()), TipoKeyboard.GIORNI));
+                    String tipoRicerca = data.substring(TOKEN_GIORNO.length());
+                    execute(sendInlineKeyBoard(chatId, SearchCriteria.FiltriRicerca.valueOf(tipoRicerca).getDes(), TipoKeyboard.GIORNI, tipoRicerca));
 
                 } else if (data.startsWith(TOKEN_DATA)) {
                     data = data.substring(TOKEN_DATA.length());
@@ -1119,13 +1135,18 @@ public class JobConfig extends TelegramLongPollingBot {
                     String now = LocalDate.now().format(FORMATTER_SIMPLE);
                     switch (filtroRicerca) {
                         case TESTO:
-                            execute(creaSendMessage(chatId, "Inserisci il testo da cercare:", false));
+                            userMessageIdOld.put(chatId, messageId);
+                            Message msgTestDaCercare = execute(creaSendMessage(chatId, "Inserisci il testo da cercare:"));
+                            userMessageIdForDelete.computeIfAbsent(chatId, k -> new ArrayList<>()).add(msgTestDaCercare.getMessageId());
+
                             break;
                         case FONTE:
                             execute(sendInlineKeyBoard(chatId, "Fonti", TipoKeyboard.FONTI));
                             break;
                         case LIMIT:
-                            execute(creaSendMessage(chatId, "Inserisci il nuovo limite:", false));
+                            userMessageIdOld.put(chatId, messageId);
+                            Message msgNuovoLimite = execute(creaSendMessage(chatId, "Inserisci il nuovo limite:"));
+                            userMessageIdForDelete.computeIfAbsent(chatId, k -> new ArrayList<>()).add(msgNuovoLimite.getMessageId());
                             break;
                         case DATA_MIN:
                             userState.put(chatId, null);
@@ -1212,32 +1233,26 @@ public class JobConfig extends TelegramLongPollingBot {
         execute(sendInlineKeyBoard(chatId, "Criterio \"" + filtroRicerca.name() + "\" impostato a: " + value, TipoKeyboard.FILTRI));
     }
 
-    private SendMessage creaSendMessage(long chatId, String msg, boolean bReply) {
+    private SendMessage creaSendMessage(long chatId, String msg) {
         SendMessage sendMessage = new SendMessage();
         sendMessage.enableHtml(true);
         sendMessage.setParseMode("html");
         sendMessage.setChatId(Long.toString(chatId));
-        String messaggio = "";
-        StringBuilder rep = new StringBuilder();
-        if (bReply) {
-            for (int i = 0; i < msg.length(); i++) {
-                rep.append("\\u").append(Integer.toHexString(msg.charAt(i)).toUpperCase());
-            }
-            rep.append(" ");
-
-            rep.append(" --> ");
-            byte[] bytes = msg.getBytes();
-            for (byte aByte : bytes) {
-                rep.append(aByte).append(",");
-            }
-            messaggio = "<b>sono il bot reply</b> per  " + chatId;
-        }
-        messaggio = messaggio + "\n" + msg;
-        if (bReply) {
-            messaggio = messaggio + "\n" + rep;
-        }
-        sendMessage.setText(messaggio);
+        sendMessage.setText(msg);
         return sendMessage;
+    }
+
+    private void cancellaMessaggi(long chatId) {
+        userMessageIdForDelete.getOrDefault(chatId, new ArrayList<>()).forEach(el -> {
+            DeleteMessage deleteMessage = new DeleteMessage(String.valueOf(chatId), el);
+            try {
+                execute(deleteMessage);
+            } catch (TelegramApiException e) {
+                throw new RuntimeException(e);
+            }
+        });
+        userMessageIdForDelete.remove(chatId);
+
     }
 
     private void aggiornaTastiera(long chatId, int messageId, List<List<InlineKeyboardButton>> nuovaTastiera) throws TelegramApiException {
@@ -1251,7 +1266,7 @@ public class JobConfig extends TelegramLongPollingBot {
         execute(editMessageReplyMarkup);
     }
 
-    private SendMessage sendInlineKeyBoard(long chatId, String testo, TipoKeyboard tipoKeyboard) {
+    private SendMessage sendInlineKeyBoard(long chatId, String testo, TipoKeyboard tipoKeyboard, String... info) {
         InlineKeyboardMarkup inlineKeyboardMarkup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> keyboards;
         switch (tipoKeyboard) {
@@ -1262,13 +1277,13 @@ public class JobConfig extends TelegramLongPollingBot {
                 keyboards = generaElencoFonti();
                 break;
             case ANNI:
-                keyboards = generaAnni(testo);
+                keyboards = generaAnni(info[0]);
                 break;
             case MESI:
-                keyboards = generaMesi(testo);
+                keyboards = generaMesi(info[0]);
                 break;
             case GIORNI:
-                keyboards = generaGiorni(testo);
+                keyboards = generaGiorni(info[0]);
                 break;
             default:
                 throw new RuntimeException("Tipi Keyboard non gestito: " + tipoKeyboard);
@@ -1481,6 +1496,8 @@ public class JobConfig extends TelegramLongPollingBot {
 
 
     private final Map<Long, String> userState = new HashMap<>();
+    private final Map<Long, Integer> userMessageIdOld = new HashMap<>();
+    private final Map<Long, List<Integer>> userMessageIdForDelete = new HashMap<>();
     private final Map<Long, SearchCriteria> userCriteria = new HashMap<>();
 
     public enum TipoKeyboard {FILTRI, FONTI, ANNI, MESI, GIORNI}

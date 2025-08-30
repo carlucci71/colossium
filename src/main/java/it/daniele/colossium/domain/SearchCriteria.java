@@ -1,8 +1,8 @@
 package it.daniele.colossium.domain;
 
 public class SearchCriteria {
-    private String testo;
-    private String fonte;
+    private String testo="";
+    private String fonte="";
     private String dataMin = "2021-01-01";
     private String dataMax = "2030-01-01";
     private String dataConsegnaMin = "2021-01-01";
@@ -88,7 +88,7 @@ public class SearchCriteria {
         DATA_MIN("Data spettacolo minima"),
         DATA_MAX("Data spettacolo massima"),
         DATA_CONSEGNA_MIN("Data notifica minima"),
-        DATA_CONSEGNA_MAX("Data notifica minima"),
+        DATA_CONSEGNA_MAX("Data notifica massima"),
         LIMIT("Numero elementi ricerca");
 
         private String des;
