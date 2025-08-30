@@ -11,6 +11,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.Scheduled;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+
 
 @Configuration
 public class ScheduledConfig {
@@ -23,20 +27,23 @@ public class ScheduledConfig {
 
     Logger logger = LoggerFactory.getLogger(this.getClass());
 
-    //@Scheduled(cron = "0 * * * * ?")//OGNI MINUTO
     @Scheduled(cron = "0 0 * * * ?")//OGNI ORA
     public void runBatchJob() {
-        try {
-            JobParameters jobParameters = new JobParametersBuilder()
-                    .addLong("time", System.currentTimeMillis())
-                    .addString("tipoElaborazione", JobConfig.TIPI_ELAB.ALL.name())
-                    .toJobParameters();
+        LocalDateTime localDateTime = LocalDateTime.now();
+        int currentHour = localDateTime.getHour();
+        if (currentHour > 8 && currentHour < 17) {
+            try {
+                JobParameters jobParameters = new JobParametersBuilder()
+                        .addLong("time", System.currentTimeMillis())
+                        .addString("tipoElaborazione", JobConfig.TIPI_ELAB.ALL.name())
+                        .toJobParameters();
 
-            JobExecution jobExecution = jobLauncher.run(jobConfig.createJob(), jobParameters);
+                JobExecution jobExecution = jobLauncher.run(jobConfig.createJob(), jobParameters);
 
-            logger.info("Batch job executed with status: {}", jobExecution.getStatus());
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+                logger.info("Batch job executed with status: {}", jobExecution.getStatus());
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         }
     }
 
