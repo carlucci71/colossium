@@ -201,9 +201,6 @@ public class TelegramBot extends TelegramLongPollingBot {
             case "/job":
                 scheduledConfig.runBatchJob();
                 break;
-            case "/ricerca":
-                ricerca(chatId);
-                break;
             case PRIMA:
                 if (stato.equals(STATE_PAGINAZIONE)) {
                     criteria.setPaginaCorrente(1);
@@ -232,10 +229,12 @@ public class TelegramBot extends TelegramLongPollingBot {
                 break;
             default:
                 if (stato != null) {
-                    SearchCriteria.FiltriRicerca filtroRicerca = null;
+                    SearchCriteria.FiltriRicerca filtroRicerca;
                     try {
                         filtroRicerca = SearchCriteria.FiltriRicerca.valueOf(stato);
-                    } catch (IllegalArgumentException e) {}
+                    } catch (IllegalArgumentException e) {
+                        filtroRicerca = null;
+                    }
                     if (filtroRicerca != null) {
                         boolean isChanged = false;
                         boolean cancellare = true;
@@ -484,8 +483,6 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
             cancellaMessaggi(chatId);
             userState.put(chatId, null);
-        } else if (stato.equals(STATE_PAGINAZIONE)) {
-
         } else {
             throw new RuntimeException("Situazione inconsistente: " + stato);
         }
@@ -498,19 +495,12 @@ public class TelegramBot extends TelegramLongPollingBot {
         SearchCriteria.FiltriRicerca filtroRicerca = SearchCriteria.FiltriRicerca.valueOf(split[0]);
         String extractCriteria = extractCriteria(criteria, filtroRicerca);
         LocalDate date = LocalDate.parse(extractCriteria, FORMATTER_SIMPLE);
-        switch (tokenElemData) {
-            case TOKEN_ANNO:
-                date = date.withYear(Integer.parseInt(split[1]));
-                break;
-            case TOKEN_MESE:
-                date = date.withMonth(Integer.parseInt(split[1]));
-                break;
-            case TOKEN_GIORNO:
-                date = date.withDayOfMonth(Integer.parseInt(split[1]));
-                break;
-            default:
-                throw new RuntimeException("Situazione inconsistente");
-        }
+        date = switch (tokenElemData) {
+            case TOKEN_ANNO -> date.withYear(Integer.parseInt(split[1]));
+            case TOKEN_MESE -> date.withMonth(Integer.parseInt(split[1]));
+            case TOKEN_GIORNO -> date.withDayOfMonth(Integer.parseInt(split[1]));
+            default -> throw new RuntimeException("Situazione inconsistente");
+        };
         String newDate = date.format(FORMATTER_SIMPLE);
         boolean isChanged = false;
         switch (filtroRicerca) {
@@ -585,26 +575,13 @@ public class TelegramBot extends TelegramLongPollingBot {
 
     private SendMessage sendInlineKeyBoard(long chatId, String testo, TipoKeyboard tipoKeyboard, String... info) {
         InlineKeyboardMarkup inlineKeyboardMarkup = new InlineKeyboardMarkup();
-        List<List<InlineKeyboardButton>> keyboards;
-        switch (tipoKeyboard) {
-            case FILTRI:
-                keyboards = generaElencoFiltri(userCriteria.getOrDefault(chatId, new SearchCriteria()));
-                break;
-            case FONTI:
-                keyboards = generaElencoFonti();
-                break;
-            case ANNI:
-                keyboards = generaAnni(info[0]);
-                break;
-            case MESI:
-                keyboards = generaMesi(info[0]);
-                break;
-            case GIORNI:
-                keyboards = generaGiorni(info[0]);
-                break;
-            default:
-                throw new RuntimeException("Tipi Keyboard non gestito: " + tipoKeyboard);
-        }
+        List<List<InlineKeyboardButton>> keyboards = switch (tipoKeyboard) {
+            case FILTRI -> generaElencoFiltri(userCriteria.getOrDefault(chatId, new SearchCriteria()));
+            case FONTI -> generaElencoFonti();
+            case ANNI -> generaAnni(info[0]);
+            case MESI -> generaMesi(info[0]);
+            case GIORNI -> generaGiorni(info[0]);
+        };
 
 
         SendMessage sendMessage = new SendMessage();
@@ -759,32 +736,15 @@ public class TelegramBot extends TelegramLongPollingBot {
     }
 
     private String extractCriteria(SearchCriteria criteria, SearchCriteria.FiltriRicerca filtroRicerca) {
-        String ret;
-        switch (filtroRicerca) {
-            case TESTO:
-                ret = criteria.getTesto();
-                break;
-            case FONTE:
-                ret = criteria.getFonte();
-                break;
-            case DATA_MIN:
-                ret = criteria.getDataMin();
-                break;
-            case DATA_MAX:
-                ret = criteria.getDataMax();
-                break;
-            case DATA_CONSEGNA_MIN:
-                ret = criteria.getDataConsegnaMin();
-                break;
-            case DATA_CONSEGNA_MAX:
-                ret = criteria.getDataConsegnaMax();
-                break;
-            case LIMIT:
-                ret = String.valueOf(criteria.getLimit());
-                break;
-            default:
-                throw new RuntimeException("Filtro non gestito: " + filtroRicerca);
-        }
+        String ret = switch (filtroRicerca) {
+            case TESTO -> criteria.getTesto();
+            case FONTE -> criteria.getFonte();
+            case DATA_MIN -> criteria.getDataMin();
+            case DATA_MAX -> criteria.getDataMax();
+            case DATA_CONSEGNA_MIN -> criteria.getDataConsegnaMin();
+            case DATA_CONSEGNA_MAX -> criteria.getDataConsegnaMax();
+            case LIMIT -> String.valueOf(criteria.getLimit());
+        };
         return ret == null ? "" : ret;
     }
 
