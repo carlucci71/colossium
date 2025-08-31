@@ -3,7 +3,7 @@ package it.daniele.colossium.domain;
 public class SearchCriteria {
     public static final String DATA_DEFAULT_MIN = "2020-01-01";
     public static final String DATA_DEFAULT_MAX = "2050-01-01";
-    public static final Integer LIMIT_DEFAULT = 25;
+    public static final Integer LIMIT_DEFAULT = 10;
     private String testo="";
     private String fonte="";
     private String dataMin = "2021-01-01";
@@ -11,15 +11,8 @@ public class SearchCriteria {
     private String dataConsegnaMin = "2021-01-01";
     private String dataConsegnaMax = "2030-01-01";
     private Integer limit = LIMIT_DEFAULT;
-    private Integer offset = 0;
-
-    public Integer getOffset() {
-        return offset;
-    }
-
-    public void setOffset(Integer offset) {
-        this.offset = offset;
-    }
+    private Integer paginaCorrente = 1;
+    private Integer totPagine = 0;
 
     public Integer getLimit() {
         return limit;
@@ -87,9 +80,28 @@ public class SearchCriteria {
         sb.append(", dataConsegnaMin='").append(dataConsegnaMin).append('\'');
         sb.append(", dataConsegnaMax='").append(dataConsegnaMax).append('\'');
         sb.append(", limit=").append(limit);
+        sb.append(", paginaCorrente=").append(paginaCorrente);
+        sb.append(", totPagine=").append(totPagine);
         sb.append('}');
         return sb.toString();
     }
+
+    public Integer getPaginaCorrente() {
+        return paginaCorrente;
+    }
+
+    public void setPaginaCorrente(Integer paginaCorrente) {
+        this.paginaCorrente = paginaCorrente;
+    }
+
+    public Integer getTotPagine() {
+        return totPagine;
+    }
+
+    public void setTotPagine(Integer totPagine) {
+        this.totPagine = totPagine;
+    }
+
     public enum FiltriRicerca {
         TESTO("Testo"),
         FONTE("Fonte"),

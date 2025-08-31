@@ -58,7 +58,7 @@ OFFSET 0;
         }
         sql = sql + " ORDER BY id ";
         sql = sql + " LIMIT " + searchCriteria.getLimit();
-        sql = sql + " OFFSET " + searchCriteria.getOffset();
+        sql = sql + " OFFSET " + (searchCriteria.getPaginaCorrente() - 1) * searchCriteria.getLimit();
         DateTimeFormatter formatter = new DateTimeFormatterBuilder()
                 .appendPattern("yyyy-MM-dd HH:mm:ss")
                 .optionalStart()
@@ -83,7 +83,7 @@ OFFSET 0;
         return new SearchResult<>(shows, totElement.get());
     }
 
-    public SearchResult<News>  cercaNews(SearchCriteria searchCriteria) {
+    public SearchResult<News> cercaNews(SearchCriteria searchCriteria) {
         /*
 SELECT *, COUNT(*) OVER() as totElement FROM news WHERE 1=1
 and (upper(titolo) like '%MORRICONE%' or upper(des) like '%MORRICONE%')
@@ -105,7 +105,7 @@ OFFSET 0;
         }
         sql = sql + " order by id ";
         sql = sql + " LIMIT " + searchCriteria.getLimit();
-        sql = sql + " OFFSET " + searchCriteria.getOffset();
+        sql = sql + " OFFSET " + (searchCriteria.getPaginaCorrente() - 1) * searchCriteria.getLimit();
         DateTimeFormatter formatter = new DateTimeFormatterBuilder()
                 .appendPattern("yyyy-MM-dd HH:mm:ss")
                 .optionalStart()
