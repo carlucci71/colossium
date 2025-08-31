@@ -49,7 +49,11 @@ import org.telegram.telegrambots.meta.api.objects.InputFile;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardRemove;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiRequestException;
 import org.telegram.telegrambots.meta.generics.BotSession;
@@ -69,6 +73,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import static it.daniele.colossium.domain.SearchCriteria.DATA_DEFAULT_MAX;
 import static it.daniele.colossium.domain.SearchCriteria.DATA_DEFAULT_MIN;
@@ -949,7 +954,7 @@ public class JobConfig extends TelegramLongPollingBot {
         }
     }
 
-    private void handleMessage(Message message) throws TelegramApiException {
+    private void handleMessage(Message message) throws Exception {
         Long chatId = message.getChat().getId();
 
         String testo = message.getText();
@@ -963,6 +968,8 @@ public class JobConfig extends TelegramLongPollingBot {
             userMessageIdOld.put(chatId, msgComponi.getMessageId());
         } else if (testo.equals("/ricerca")) {
             ricerca(chatId);
+//		AGGIUNGE TASTIERA
+            execute(altraTastiera(chatId));
         } else {
             String stato = userState.get(chatId);
             if (stato != null) {
@@ -1137,7 +1144,7 @@ public class JobConfig extends TelegramLongPollingBot {
                     String now = LocalDate.now().format(FORMATTER_SIMPLE);
                     switch (filtroRicerca) {
                         case TESTO:
-                          //  userMessageIdOld.put(chatId, messageId);
+                            //  userMessageIdOld.put(chatId, messageId);
                             Message msgTestDaCercare = execute(creaSendMessage(chatId, "Inserisci il testo da cercare:"));
                             userMessageIdForDelete.computeIfAbsent(chatId, k -> new ArrayList<>()).add(msgTestDaCercare.getMessageId());
 
@@ -1493,6 +1500,41 @@ public class JobConfig extends TelegramLongPollingBot {
         }
         return ret == null ? "" : ret;
     }
+
+    private SendMessage altraTastiera(long chatId) throws Exception {
+        SendMessage sendMessage = new SendMessage();
+        sendMessage.enableHtml(true);
+        sendMessage.setParseMode("html");
+        sendMessage.enableMarkdown(true);
+
+        sendMessage.setChatId(Long.toString(chatId));
+        // Create a keyboard
+        ReplyKeyboardMarkup replyKeyboardMarkup = new ReplyKeyboardMarkup();
+        sendMessage.setReplyMarkup(replyKeyboardMarkup);
+        replyKeyboardMarkup.setSelective(true);
+        replyKeyboardMarkup.setResizeKeyboard(true);
+        replyKeyboardMarkup.setOneTimeKeyboard(false);
+        replyKeyboardMarkup.setIsPersistent(true);
+
+        // Create a list of keyboard rows
+        List<KeyboardRow> keyboard = new ArrayList<>();
+
+        Set<String> elencoGiocatori = Set.of("ciao", "come", "va");
+        for (String giocatore : elencoGiocatori) {
+            KeyboardRow kbRiga = new KeyboardRow();
+            KeyboardButton kbGiocatore = new KeyboardButton(giocatore);
+            kbRiga.add(kbGiocatore);
+            keyboard.add(kbRiga);
+        }
+
+
+        // and assign this list to our keyboard
+        replyKeyboardMarkup.setKeyboard(keyboard);
+        sendMessage.setReplyMarkup(replyKeyboardMarkup);
+        sendMessage.setText("seleziona il giocatore");
+        return sendMessage;
+    }
+
 
     @PostConstruct
     public JobConfig inizializza() throws Exception {

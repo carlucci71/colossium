@@ -1,6 +1,5 @@
 package it.daniele.colossium;
 
-import it.daniele.colossium.batch.JobConfig;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ConfigurableApplicationContext;
