@@ -1,5 +1,6 @@
-package it.daniele.colossium.batch;
+package it.daniele.colossium.telegrambot;
 
+import it.daniele.colossium.batch.ScheduledConfig;
 import it.daniele.colossium.domain.News;
 import it.daniele.colossium.domain.SearchCriteria;
 import it.daniele.colossium.domain.Show;
@@ -8,8 +9,9 @@ import org.apache.commons.lang3.ObjectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -31,7 +33,6 @@ import org.telegram.telegrambots.meta.generics.BotSession;
 import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 import secrets.ConstantColossium;
 
-import javax.annotation.PostConstruct;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -46,20 +47,21 @@ import static it.daniele.colossium.domain.SearchCriteria.DATA_DEFAULT_MIN;
 import static it.daniele.colossium.domain.SearchCriteria.LIMIT_DEFAULT;
 
 
-@SuppressWarnings("deprecation")
-@Configuration
+@Component
 public class TelegramBot extends TelegramLongPollingBot {
 
-    public static final String TOKEN = "#@@#";
-    public static final String TOKEN_ANNO = "#ANNO#";
-    public static final String TOKEN_DATA = "#DATA#";
-    public static final String TOKEN_MESE = "#MESE#";
-    public static final String TOKEN_GIORNO = "#GIORNO#";
-    public static final String TOKEN_CANCELLA = "#CANCELLA#";
-    public static final String TOKEN_RICERCA = "#RICERCA#";
 
-    TelegramBot() {
-        super(ConstantColossium.BOT_TOKEN);
+    private final Map<Long, String> userState = new HashMap<>();
+    private final Map<Long, Integer> userMessageIdOld = new HashMap<>();
+    private final Map<Long, List<Integer>> userMessageIdForDelete = new HashMap<>();
+    private final Map<Long, SearchCriteria> userCriteria = new HashMap<>();
+    private final BotSession botSession;
+
+    TelegramBot(@Qualifier("tokenBot") String tokenBot) throws TelegramApiException {
+        super(tokenBot);
+        logger.info("Bot Avviato");
+        TelegramBotsApi telegramBotsApi = new TelegramBotsApi(DefaultBotSession.class);
+        botSession = telegramBotsApi.registerBot(this);
     }
 
     Logger logger = LoggerFactory.getLogger(this.getClass());
@@ -77,11 +79,6 @@ public class TelegramBot extends TelegramLongPollingBot {
     @Override
     public String getBotUsername() {
         return ConstantColossium.BOT_USERNAME;
-    }
-
-    @Override
-    public String getBotToken() {
-        return ConstantColossium.BOT_TOKEN;
     }
 
     private void salvaMessaggio(Message message) {
@@ -181,61 +178,66 @@ public class TelegramBot extends TelegramLongPollingBot {
         String testo = message.getText();
         SearchCriteria criteria = userCriteria.getOrDefault(chatId, new SearchCriteria());
 
-        if (testo.equals("/componi")) {
-            userState.remove(chatId);
-            userCriteria.remove(chatId);
-            userMessageIdForDelete.remove(chatId);
-            Message msgComponi = execute(sendInlineKeyBoard(chatId, testo, TipoKeyboard.FILTRI));
-            userMessageIdOld.put(chatId, msgComponi.getMessageId());
-        } else if (testo.equals("/job")) {
-            scheduledConfig.runBatchJob();
-
-        } else if (testo.equals("/ricerca")) {
-            ricerca(chatId);
-//		AGGIUNGE TASTIERA
-            execute(altraTastiera(chatId));
-        } else {
-            String stato = userState.get(chatId);
-            if (stato != null) {
-                SearchCriteria.FiltriRicerca filtroRicerca = SearchCriteria.FiltriRicerca.valueOf(stato);
-                boolean isChanged = false;
-                boolean cancellare = true;
-                List<Integer> msgForDelete = userMessageIdForDelete.computeIfAbsent(chatId, k -> new ArrayList<>());
-                switch (filtroRicerca) {
-                    case TESTO:
-                        msgForDelete.add(message.getMessageId());
-                        if (!testo.equals(criteria.getTesto())) {
-                            criteria.setTesto(testo);
-                            isChanged = true;
-                        }
-                        userState.put(chatId, null);
-                        break;
-                    case LIMIT:
-                        try {
+        switch (testo) {
+            case "/componi":
+                userState.remove(chatId);
+                userCriteria.remove(chatId);
+                userMessageIdForDelete.remove(chatId);
+                Message msgComponi = execute(sendInlineKeyBoard(chatId, testo, TipoKeyboard.FILTRI));
+                userMessageIdOld.put(chatId, msgComponi.getMessageId());
+                break;
+            case "/stop":
+                stopBot();
+                break;
+            case "/job":
+                scheduledConfig.runBatchJob();
+                break;
+            case "/ricerca":
+                ricerca(chatId);
+                break;
+            default:
+                String stato = userState.get(chatId);
+                if (stato != null) {
+                    SearchCriteria.FiltriRicerca filtroRicerca = SearchCriteria.FiltriRicerca.valueOf(stato);
+                    boolean isChanged = false;
+                    boolean cancellare = true;
+                    List<Integer> msgForDelete = userMessageIdForDelete.computeIfAbsent(chatId, k -> new ArrayList<>());
+                    switch (filtroRicerca) {
+                        case TESTO:
                             msgForDelete.add(message.getMessageId());
-                            Integer iTesto = Integer.parseInt(testo);
-                            if (!iTesto.equals(criteria.getLimit())) {
-                                criteria.setLimit(iTesto);
+                            if (!testo.equals(criteria.getTesto())) {
+                                criteria.setTesto(testo);
                                 isChanged = true;
-                                userState.put(chatId, null);
                             }
-                        } catch (NumberFormatException e) {
-                            cancellare = false;
-                            Message msgValoreNumerico = execute(creaSendMessage(chatId, "Inserire un valore numerico "));
-                            msgForDelete.add(msgValoreNumerico.getMessageId());
-                        }
-                        break;
-                    default:
-                        throw new RuntimeException("Filtro non gestito: " + filtroRicerca);
+                            userState.put(chatId, null);
+                            break;
+                        case LIMIT:
+                            try {
+                                msgForDelete.add(message.getMessageId());
+                                Integer iTesto = Integer.parseInt(testo);
+                                if (!iTesto.equals(criteria.getLimit())) {
+                                    criteria.setLimit(iTesto);
+                                    isChanged = true;
+                                    userState.put(chatId, null);
+                                }
+                            } catch (NumberFormatException e) {
+                                cancellare = false;
+                                Message msgValoreNumerico = execute(creaSendMessage(chatId, "Inserire un valore numerico "));
+                                msgForDelete.add(msgValoreNumerico.getMessageId());
+                            }
+                            break;
+                        default:
+                            throw new RuntimeException("Filtro non gestito: " + filtroRicerca);
+                    }
+                    userCriteria.put(chatId, criteria);
+                    if (isChanged) {
+                        aggiornaTastiera(chatId, userMessageIdOld.get(chatId), generaElencoFiltri(criteria));
+                    }
+                    if (cancellare) {
+                        cancellaMessaggi(chatId);
+                    }
                 }
-                userCriteria.put(chatId, criteria);
-                if (isChanged) {
-                    aggiornaTastiera(chatId, userMessageIdOld.get(chatId), generaElencoFiltri(criteria));
-                }
-                if (cancellare) {
-                    cancellaMessaggi(chatId);
-                }
-            }
+                break;
         }
     }
 
@@ -243,19 +245,26 @@ public class TelegramBot extends TelegramLongPollingBot {
         SearchCriteria criteria = userCriteria.getOrDefault(chatId, new SearchCriteria());
         execute(creaSendMessage(chatId, "Avvio ricerca con criteri: " + criteria));
         List<Show> shows = new ArrayList<>();
+        int totElement=0;
         if (ObjectUtils.isEmpty(criteria.getFonte())
                 || !criteria.getFonte().equals(Fonti.COLOSSEO_NEWS.name())) {
-            shows = ricercheRepository.cercaShow(criteria);
+            RicercheRepository.SearchResult<Show> showSearchResult = ricercheRepository.cercaShow(criteria);
+            shows=showSearchResult.elements();
+            totElement+=showSearchResult.totElement();
         }
         List<News> news = new ArrayList<>();
         if (!ObjectUtils.isEmpty(criteria.getFonte())
                 && criteria.getFonte().equals(Fonti.COLOSSEO_NEWS.name())) {
-            news = ricercheRepository.cercaNews(criteria);
+            RicercheRepository.SearchResult<News> newsSearchResult = ricercheRepository.cercaNews(criteria);
+            news = newsSearchResult.elements();
+            totElement+= newsSearchResult.totElement();
         }
-        int tot = shows.size() + news.size();
-        if (tot > criteria.getLimit()) {
-            execute(creaSendMessage(chatId, "Restringere la ricerca. Troppi elementi: " + tot));
-        } else if (tot == 0) {
+        if (totElement > criteria.getLimit()) {
+            execute(creaSendMessage(chatId, "Restringere la ricerca. Troppi elementi: " + totElement));
+            userState.put(chatId, STATE_PAGINAZIONE);
+//		AGGIUNGE TASTIERA PAGINAZIONE RICERCA
+            execute(tastieraPaginazioneRicerca(chatId));
+        } else if (totElement == 0) {
             execute(creaSendMessage(chatId, "Nessun elemento trovato "));
         } else {
             for (Show show : shows) {
@@ -423,6 +432,8 @@ public class TelegramBot extends TelegramLongPollingBot {
             }
             cancellaMessaggi(chatId);
             userState.put(chatId, null);
+        } else if (stato.equals(STATE_PAGINAZIONE)) {
+
         } else {
             throw new RuntimeException("Situazione inconsistente: " + stato);
         }
@@ -725,64 +736,47 @@ public class TelegramBot extends TelegramLongPollingBot {
         return ret == null ? "" : ret;
     }
 
-    private SendMessage altraTastiera(long chatId)  {
+    private SendMessage tastieraPaginazioneRicerca(long chatId)  {
         SendMessage sendMessage = new SendMessage();
         sendMessage.enableHtml(true);
         sendMessage.setParseMode("html");
         sendMessage.enableMarkdown(true);
-
         sendMessage.setChatId(Long.toString(chatId));
-        // Create a keyboard
         ReplyKeyboardMarkup replyKeyboardMarkup = new ReplyKeyboardMarkup();
         sendMessage.setReplyMarkup(replyKeyboardMarkup);
         replyKeyboardMarkup.setSelective(true);
         replyKeyboardMarkup.setResizeKeyboard(true);
         replyKeyboardMarkup.setOneTimeKeyboard(false);
         replyKeyboardMarkup.setIsPersistent(true);
-
-        // Create a list of keyboard rows
         List<KeyboardRow> keyboard = new ArrayList<>();
 
-        Set<String> elencoGiocatori = Set.of("ciao", "come", "va");
-        for (String giocatore : elencoGiocatori) {
+        Set<String> tasti = Set.of("prima", "prossima", "precedente", "ultima");
+        for (String giocatore : tasti) {
             KeyboardRow kbRiga = new KeyboardRow();
             KeyboardButton kbGiocatore = new KeyboardButton(giocatore);
             kbRiga.add(kbGiocatore);
             keyboard.add(kbRiga);
         }
-
-
-        // and assign this list to our keyboard
         replyKeyboardMarkup.setKeyboard(keyboard);
         sendMessage.setReplyMarkup(replyKeyboardMarkup);
-        sendMessage.setText("seleziona il giocatore");
+        sendMessage.setText("seleziona la paginazione");
         return sendMessage;
     }
 
-
-    @PostConstruct
-    public TelegramBot inizializza() throws Exception {
-        logger.info("Bot Avviato");
-        TelegramBotsApi telegramBotsApi = new TelegramBotsApi(DefaultBotSession.class);
-        jobConfigBot = this;
-        registerBot = telegramBotsApi.registerBot(jobConfigBot);
-        return jobConfigBot;
+    public void stopBot() {
+        botSession.stop();
     }
 
-
-    TelegramBot jobConfigBot;
-    private BotSession registerBot;
-
-
-    private final Map<Long, String> userState = new HashMap<>();
-    private final Map<Long, Integer> userMessageIdOld = new HashMap<>();
-    private final Map<Long, List<Integer>> userMessageIdForDelete = new HashMap<>();
-    private final Map<Long, SearchCriteria> userCriteria = new HashMap<>();
-
-    public enum TipoKeyboard {FILTRI, FONTI, ANNI, MESI, GIORNI}
-
-    public enum Fonti {CONCORDIA, DICE, TICKETONE, TICKETMASTER, VIVATICKET, MAILTICKET, COLOSSEO, COLOSSEO_NEWS}
-
-    DateTimeFormatter FORMATTER_SIMPLE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private enum TipoKeyboard {FILTRI, FONTI, ANNI, MESI, GIORNI}
+    private enum Fonti {CONCORDIA, DICE, TICKETONE, TICKETMASTER, VIVATICKET, MAILTICKET, COLOSSEO, COLOSSEO_NEWS}
+    private final DateTimeFormatter FORMATTER_SIMPLE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    private static final String TOKEN = "#@@#";
+    private static final String TOKEN_ANNO = "#ANNO#";
+    private static final String TOKEN_DATA = "#DATA#";
+    private static final String TOKEN_MESE = "#MESE#";
+    private static final String TOKEN_GIORNO = "#GIORNO#";
+    private static final String TOKEN_CANCELLA = "#CANCELLA#";
+    private static final String TOKEN_RICERCA = "#RICERCA#";
+    private static final String STATE_PAGINAZIONE = "statePaginazione";
 
 }
