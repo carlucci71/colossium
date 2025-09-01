@@ -109,7 +109,7 @@ public class SearchCriteria {
         DATA_MAX("Data spettacolo massima"),
         DATA_CONSEGNA_MIN("Data notifica minima"),
         DATA_CONSEGNA_MAX("Data notifica massima"),
-        LIMIT("Numero elementi ricerca");
+        LIMIT("Dim. pagina");
 
         private String des;
 

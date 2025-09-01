@@ -40,6 +40,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static it.daniele.colossium.domain.SearchCriteria.DATA_DEFAULT_MAX;
@@ -619,7 +620,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                     elemInRiga.add(inlineKeyboardButton);
                     //MESE
                     inlineKeyboardButton = new InlineKeyboardButton();
-                    inlineKeyboardButton.setText(String.valueOf(date.getMonth()));
+                    inlineKeyboardButton.setText(LocalDate.of(2021, date.getMonth(), 1).format(formatterMeseItaliano));
                     inlineKeyboardButton.setCallbackData(TOKEN_MESE + filtroRicerca.name());
                     elemInRiga.add(inlineKeyboardButton);
                     inlineKeyboardButton = new InlineKeyboardButton();
@@ -699,7 +700,7 @@ public class TelegramBot extends TelegramLongPollingBot {
             List<InlineKeyboardButton> elemInRiga = new ArrayList<>();
             for (int i = 1; i <= 12; i++) {
                 InlineKeyboardButton inlineKeyboardButton = new InlineKeyboardButton();
-                inlineKeyboardButton.setText(LocalDate.of(2021, i, 1).getMonth().name());
+                inlineKeyboardButton.setText(LocalDate.of(2021, i, 1).format(formatterMeseItaliano));
                 inlineKeyboardButton.setCallbackData(TOKEN_DATA + TOKEN_MESE + campo + TOKEN + i);
                 elemInRiga.add(inlineKeyboardButton);
                 if (elemInRiga.size() == 4) {
@@ -786,6 +787,7 @@ public class TelegramBot extends TelegramLongPollingBot {
     private enum Fonti {CONCORDIA, DICE, TICKETONE, TICKETMASTER, VIVATICKET, MAILTICKET, COLOSSEO, COLOSSEO_NEWS}
 
     private final DateTimeFormatter FORMATTER_SIMPLE = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+    DateTimeFormatter formatterMeseItaliano = DateTimeFormatter.ofPattern("MMMM", Locale.ITALIAN);
     private static final String TOKEN = "#@@#";
     private static final String TOKEN_ANNO = "#ANNO#";
     private static final String TOKEN_DATA = "#DATA#";
