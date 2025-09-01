@@ -35,23 +35,27 @@ public class ScheduledConfig {
         LocalDateTime localDateTime = LocalDateTime.now();
         int currentHour = localDateTime.getHour();
         if (currentHour > 8 && currentHour < 17) {
-            try {
-                String conRecap="N";
-                if (currentHour==10 || currentHour==13){
-                    conRecap="S";
-                }
-                JobParameters jobParameters = new JobParametersBuilder()
-                        .addLong("time", System.currentTimeMillis())
-                        .addString(TIPO_ELABORAZIONE, JobConfig.TIPI_ELAB.ALL.name())
-                        .addString(CON_RECAP, conRecap)
-                        .toJobParameters();
-
-                JobExecution jobExecution = jobLauncher.run(jobConfig.createJob(), jobParameters);
-
-                logger.info("Batch job executed with status: {}", jobExecution.getStatus());
-            } catch (Exception e) {
-                throw new RuntimeException(e);
+            String conRecap = "N";
+            if (currentHour == 10 || currentHour == 13) {
+                conRecap = "S";
             }
+            runBatchJob(conRecap);
+        }
+    }
+
+    public void runBatchJob(String conRecap) {
+        try {
+            JobParameters jobParameters = new JobParametersBuilder()
+                    .addLong("time", System.currentTimeMillis())
+                    .addString(TIPO_ELABORAZIONE, JobConfig.TIPI_ELAB.ALL.name())
+                    .addString(CON_RECAP, conRecap)
+                    .toJobParameters();
+
+            JobExecution jobExecution = jobLauncher.run(jobConfig.createJob(), jobParameters);
+
+            logger.info("Batch job executed with status: {}", jobExecution.getStatus());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 

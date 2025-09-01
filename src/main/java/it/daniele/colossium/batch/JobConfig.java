@@ -76,7 +76,6 @@ public class JobConfig {
     JobBuilderFactory jobBuilderFactory;
 
 
-    int contaEventi;
 
     //@Bean
     public Job createJob() {
@@ -91,7 +90,6 @@ public class JobConfig {
 
     enum TIPI_ELAB {NEWS_COLOSSEO, SHOW_COLOSSEO, TICKET_ONE, SALONE_LIBRO, CONCORDIA, VIVATICKET, DICE, TICKET_MASTER, MAIL_TICKET, ALL}
 
-    ;
     TIPI_ELAB tipoElaborazione;
 
 
@@ -105,6 +103,7 @@ public class JobConfig {
                 messaggiInviati = 0;
                 listNews = new ArrayList<>();
                 listShow = new ArrayList<>();
+                contaEventi = 0;
                 posizioneNews = 0;
                 posizioneShow = 0;
                 esito = "";
@@ -113,7 +112,11 @@ public class JobConfig {
 
             public void afterJob(JobExecution jobExecution) {
                 if (jobExecution.getStatus() == BatchStatus.COMPLETED
-                        && "S".equals(jobExecution.getJobParameters().getString(CON_RECAP))) {
+                        && (
+                        "S".equals(jobExecution.getJobParameters().getString(CON_RECAP))
+                                || (messaggiInviati + totNewShows.size() > 0)
+                )
+                ) {
                     logger.info(totNewShows.toString());
                     telegramBot.inviaMessaggio("(" + contaEventi + ")\n" +
                             "skipped: " + skipped + "\n" +
@@ -815,16 +818,16 @@ public class JobConfig {
     }
 
 
-
-    Map<String, Integer> totShows;
-    Map<String, Integer> totNewShows;
-    int messaggiInviati;
+    private Map<String, Integer> totShows;
+    private Map<String, Integer> totNewShows;
+    private int messaggiInviati;
     private List<News> listNews;
     private List<Show> listShow;
-    int posizioneNews;
-    int posizioneShow;
-    String esito;
-    List<String> skipped;
+    private int contaEventi;
+    private int posizioneNews;
+    private int posizioneShow;
+    private String esito;
+    private List<String> skipped;
 
 
 }

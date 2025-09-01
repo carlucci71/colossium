@@ -199,7 +199,7 @@ public class TelegramBot extends TelegramLongPollingBot {
                 stopBot();
                 break;
             case "/job":
-                scheduledConfig.runBatchJob();
+                scheduledConfig.runBatchJob("S");
                 break;
             case PRIMA:
                 if (stato.equals(STATE_PAGINAZIONE)) {
