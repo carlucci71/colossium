@@ -15,6 +15,9 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
+import static it.daniele.colossium.batch.JobConfig.CON_RECAP;
+import static it.daniele.colossium.batch.JobConfig.TIPO_ELABORAZIONE;
+
 
 @Configuration
 public class ScheduledConfig {
@@ -33,9 +36,14 @@ public class ScheduledConfig {
         int currentHour = localDateTime.getHour();
         if (currentHour > 8 && currentHour < 17) {
             try {
+                String conRecap="N";
+                if (currentHour==10 || currentHour==13){
+                    conRecap="S";
+                }
                 JobParameters jobParameters = new JobParametersBuilder()
                         .addLong("time", System.currentTimeMillis())
-                        .addString("tipoElaborazione", JobConfig.TIPI_ELAB.ALL.name())
+                        .addString(TIPO_ELABORAZIONE, JobConfig.TIPI_ELAB.ALL.name())
+                        .addString(CON_RECAP, conRecap)
                         .toJobParameters();
 
                 JobExecution jobExecution = jobLauncher.run(jobConfig.createJob(), jobParameters);

@@ -58,6 +58,8 @@ import java.util.Map;
 @Configuration
 @EnableBatchProcessing
 public class JobConfig {
+    public static final String TIPO_ELABORAZIONE = "tipoElaborazione";
+    public static final String CON_RECAP = "conRecap";
     RestTemplate restTemplate = new RestTemplate();
     Logger logger = LoggerFactory.getLogger(this.getClass());
 
@@ -96,7 +98,7 @@ public class JobConfig {
     private JobExecutionListener jobResultListener() {
         return new JobExecutionListener() {
             public void beforeJob(JobExecution jobExecution) {
-                tipoElaborazione = TIPI_ELAB.valueOf(jobExecution.getJobParameters().getString("tipoElaborazione"));
+                tipoElaborazione = TIPI_ELAB.valueOf(jobExecution.getJobParameters().getString(TIPO_ELABORAZIONE));
                 logger.debug("Called beforeJob: " + tipoElaborazione);
                 totShows = new HashMap<>();
                 totNewShows = new HashMap<>();
@@ -110,7 +112,8 @@ public class JobConfig {
             }
 
             public void afterJob(JobExecution jobExecution) {
-                if (jobExecution.getStatus() == BatchStatus.COMPLETED) {
+                if (jobExecution.getStatus() == BatchStatus.COMPLETED
+                        && "S".equals(jobExecution.getJobParameters().getString(CON_RECAP))) {
                     logger.info(totNewShows.toString());
                     telegramBot.inviaMessaggio("(" + contaEventi + ")\n" +
                             "skipped: " + skipped + "\n" +
