@@ -14,6 +14,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 import static it.daniele.colossium.batch.JobConfig.CON_RECAP;
 import static it.daniele.colossium.batch.JobConfig.TIPO_ELABORAZIONE;
@@ -32,12 +33,12 @@ public class ScheduledConfig {
 
     @Scheduled(cron = "0 0 * * * ?")//OGNI ORA
     public void runBatchJob() {
-        LocalDateTime localDateTime = LocalDateTime.now();
-        int currentHour = localDateTime.getHour();
+        ZonedDateTime romeTime = ZonedDateTime.now(ZoneId.of("Europe/Rome"));
+        int currentHour = romeTime.getHour();
         if (currentHour > 8 && currentHour < 17) {
             String conRecap = "N";
             if (currentHour == 10 || currentHour == 13) {
-                conRecap = String.valueOf(currentHour);
+                conRecap = "S";
             }
             runBatchJob(conRecap);
         }
