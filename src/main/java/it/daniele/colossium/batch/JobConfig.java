@@ -111,9 +111,10 @@ public class JobConfig {
             }
 
             public void afterJob(JobExecution jobExecution) {
+                String conRecap = jobExecution.getJobParameters().getString(CON_RECAP);
                 if (jobExecution.getStatus() == BatchStatus.COMPLETED
                         && (
-                        "S".equals(jobExecution.getJobParameters().getString(CON_RECAP))
+                        !"N".equals(conRecap)
                                 || (messaggiInviati + totNewShows.size() > 0)
                 )
                 ) {
@@ -123,6 +124,7 @@ public class JobConfig {
                             "nuove news: " + messaggiInviati + "\n" +
                             "nuovi show:" + totNewShows + "\n\n" +
                             esito +
+                            " ->" + conRecap + "<- " +
                             "processati: " + totShows
                     );
                     logger.info("COMPLETED: {}", jobExecution);

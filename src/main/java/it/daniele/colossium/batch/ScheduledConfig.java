@@ -37,7 +37,7 @@ public class ScheduledConfig {
         if (currentHour > 8 && currentHour < 17) {
             String conRecap = "N";
             if (currentHour == 10 || currentHour == 13) {
-                conRecap = "S";
+                conRecap = String.valueOf(currentHour);
             }
             runBatchJob(conRecap);
         }
