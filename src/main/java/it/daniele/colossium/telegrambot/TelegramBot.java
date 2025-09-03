@@ -116,9 +116,11 @@ public class TelegramBot extends TelegramLongPollingBot {
                     }
                     inviaMessaggio(msg);
                 } else {
+                    logger.info("Messaggio: {}");
                     throw new RuntimeException(e);
                 }
             } catch (TelegramApiException e) {
+                logger.info("Messaggio: {}");
                 throw new RuntimeException(e);
             }
         }
