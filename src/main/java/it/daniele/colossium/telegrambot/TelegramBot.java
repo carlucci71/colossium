@@ -192,6 +192,9 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         switch (testo) {
             case "/componi":
+                if (stato != null && stato.equals(STATE_PAGINAZIONE)) {
+                    removeKeyboard(chatId);
+                }
                 userState.remove(chatId);
                 userCriteria.remove(chatId);
                 userMessageIdForDelete.remove(chatId);
@@ -329,15 +332,7 @@ public class TelegramBot extends TelegramLongPollingBot {
         String data = callback.getData();
         String stato = userState.get(chatId);
         if (stato != null && stato.equals(STATE_PAGINAZIONE)) {
-            ReplyKeyboardRemove replyKeyboardMarkup = new ReplyKeyboardRemove();
-            replyKeyboardMarkup.setRemoveKeyboard(true);
-            SendMessage sendMessage = new SendMessage();
-            sendMessage.enableHtml(true);
-            sendMessage.setParseMode("html");
-            sendMessage.setChatId(Long.toString(chatId));
-            sendMessage.setReplyMarkup(replyKeyboardMarkup);
-            sendMessage.setText("esco dalla paginazione");
-            execute(sendMessage);
+            removeKeyboard(chatId);
             stato = null;
             criteria.setPaginaCorrente(1);
             criteria.setTotPagine(0);
@@ -489,6 +484,18 @@ public class TelegramBot extends TelegramLongPollingBot {
         } else {
             throw new RuntimeException("Situazione inconsistente: " + stato);
         }
+    }
+
+    private void removeKeyboard(Long chatId) throws TelegramApiException {
+        ReplyKeyboardRemove replyKeyboardMarkup = new ReplyKeyboardRemove();
+        replyKeyboardMarkup.setRemoveKeyboard(true);
+        SendMessage sendMessage = new SendMessage();
+        sendMessage.enableHtml(true);
+        sendMessage.setParseMode("html");
+        sendMessage.setChatId(Long.toString(chatId));
+        sendMessage.setReplyMarkup(replyKeyboardMarkup);
+        sendMessage.setText("esco dalla paginazione");
+        execute(sendMessage);
     }
 
     private void updateData(String data, Long chatId, String tokenElemData) throws TelegramApiException {
