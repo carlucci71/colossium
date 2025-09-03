@@ -124,7 +124,7 @@ public class JobConfig {
                             "nuove news: " + messaggiInviati + "\n" +
                             "nuovi show:" + totNewShows + "\n\n" +
                             esito +
-                            " ..." + conRecap + "... " +
+//                            " ..." + conRecap + "... " +
                             "processati: " + totShows
                     );
                     logger.info("COMPLETED: {}", jobExecution);
