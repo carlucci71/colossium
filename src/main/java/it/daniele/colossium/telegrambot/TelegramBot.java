@@ -192,9 +192,7 @@ public class TelegramBot extends TelegramLongPollingBot {
 
         switch (testo) {
             case "/componi":
-                if (stato != null && stato.equals(STATE_PAGINAZIONE)) {
-                    removeKeyboard(chatId);
-                }
+                removeKeyboard(chatId);
                 userState.remove(chatId);
                 userCriteria.remove(chatId);
                 userMessageIdForDelete.remove(chatId);
