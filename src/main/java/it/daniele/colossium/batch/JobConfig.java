@@ -52,6 +52,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 
 @SuppressWarnings("deprecation")
@@ -88,7 +90,7 @@ public class JobConfig {
                 .build();
     }
 
-    enum TIPI_ELAB {NEWS_COLOSSEO, SHOW_COLOSSEO, TICKET_ONE, SALONE_LIBRO, CONCORDIA, VIVATICKET, DICE, TICKET_MASTER, MAIL_TICKET, ALL}
+    enum TIPI_ELAB {NEWS_COLOSSEO, SHOW_COLOSSEO, TICKET_ONE, SALONE_LIBRO, CONCORDIA, VIVATICKET, DICE, TICKET_MASTER, MAIL_TICKET, EVENTBRITE, ALL}
 
     TIPI_ELAB tipoElaborazione;
 
@@ -160,6 +162,7 @@ public class JobConfig {
     private Step stepInit() {
         return stepBuilderFactory.get("stepInit")
                 .tasklet((contribution, chunkContext) -> {
+                   // leggiEventbrite();
                     leggiNewsColosseo();
                     leggiShowColosseo();
                     leggiTicketOne();
@@ -173,6 +176,49 @@ public class JobConfig {
                 })
                 .listener(stepResultListener())
                 .build();
+    }
+
+    private void leggiEventbrite() {
+        String fonte = "Eventbrite";
+        try {
+            if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.EVENTBRITE) {
+                int showIniziali = listShow.size();
+//                int page = 1;
+//                int tp=1;
+                Integer page=1;
+                do {
+                    String from = "https://www.eventbrite.it/d/italy--torino/all-events/?page=" + page;
+                    String html;
+                    try {
+                        html = restTemplate.getForObject(from, String.class);
+                        Document doc = Jsoup.parse(html);
+                        Elements nextLinks = doc.select("link[rel=next]");
+                        String html2 = nextLinks.get(0).toString();
+
+                        Pattern pattern = Pattern.compile("href=\"\\?page=(\\d+)\"");
+                        Matcher matcher = pattern.matcher(html2);
+                        if (matcher.find()) {
+                            String pageNumber = matcher.group(1); // "2"
+                            page=Integer.parseInt(pageNumber);
+                        } else {
+                            page=null;
+                        }
+
+
+
+//                        int index = html.indexOf("<link rel=\"next\" href=\"?page=");
+
+                    } catch (Exception e) {
+                        throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
+                    }
+//                    page++;
+                } while (page != null);
+                totShows.put(fonte, listShow.size() - showIniziali);
+            }
+        } catch (RuntimeException e) {
+            logger.error(e.getMessage(), e);
+            skipped.add(fonte);
+        }
     }
 
 
@@ -235,7 +281,7 @@ public class JobConfig {
                         }
 
                         try {
-                            href = element.get("link_webshop").toString();
+                            href = element.get("link_webshop")==null?"":element.get("link_webshop").toString();
                         } catch (Exception e) {
                             logger.error("Eccezione in: " + id + " link ");
                         }
