@@ -78,7 +78,6 @@ public class JobConfig {
     JobBuilderFactory jobBuilderFactory;
 
 
-
     //@Bean
     public Job createJob() {
         return jobBuilderFactory.get("MyJob")
@@ -162,7 +161,6 @@ public class JobConfig {
     private Step stepInit() {
         return stepBuilderFactory.get("stepInit")
                 .tasklet((contribution, chunkContext) -> {
-                   // leggiEventbrite();
                     leggiNewsColosseo();
                     leggiShowColosseo();
                     leggiTicketOne();
@@ -171,6 +169,7 @@ public class JobConfig {
                     leggiDice();
                     leggiTicketMaster();
                     leggiMailTicket();
+                    leggiEventbrite();
                     cancellaNotificheTelegramScadute();
                     return RepeatStatus.FINISHED;
                 })
@@ -183,33 +182,84 @@ public class JobConfig {
         try {
             if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.EVENTBRITE) {
                 int showIniziali = listShow.size();
-//                int page = 1;
-//                int tp=1;
-                Integer page=1;
+                Integer page = 1;
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd", Locale.ITALIAN);
                 do {
                     String from = "https://www.eventbrite.it/d/italy--torino/all-events/?page=" + page;
                     String html;
                     try {
                         html = restTemplate.getForObject(from, String.class);
-                        Document doc = Jsoup.parse(html);
-                        Elements nextLinks = doc.select("link[rel=next]");
-                        String html2 = nextLinks.get(0).toString();
-
-                        Pattern pattern = Pattern.compile("href=\"\\?page=(\\d+)\"");
-                        Matcher matcher = pattern.matcher(html2);
-                        if (matcher.find()) {
-                            String pageNumber = matcher.group(1); // "2"
-                            page=Integer.parseInt(pageNumber);
+                        String tokenInizio = "window.__SERVER_DATA__ = ";
+                        html = html.substring(html.indexOf(tokenInizio) + tokenInizio.length());
+                        String tokenFine = "};";
+                        html = html.substring(0, html.indexOf(tokenFine) + 1).trim();
+                        Map<String, Object> map = jsonToMap(html);
+                        List<Map<String, Object>> l = (List<Map<String, Object>>) map.get("jsonld");
+                        Map<String, Object> map2 = l.get(0);
+                        List<Map<String, Object>> listaElem = (List<Map<String, Object>>) map2.get("itemListElement");
+                        if (listaElem == null) {
+                            page = null;
                         } else {
-                            page=null;
+                            for (int i = 0; i < listaElem.size(); i++) {
+                                Map<String, Object> item = (Map<String, Object>) listaElem.get(i).get("item");
+                                try {
+                                    String data = "";
+                                    String titolo = "";
+                                    String img = "";
+                                    String href = "";
+                                    String des = "";
+
+                                    try {
+                                        data = item.get("startDate").toString();
+                                    } catch (Exception e) {
+                                    }
+                                    try {
+                                        titolo = item.get("name").toString();
+                                    } catch (Exception e) {
+                                    }
+                                    try {
+                                        img = item.get("image").toString();
+                                    } catch (Exception e) {
+                                    }
+                                    try {
+                                        href = item.get("url").toString();
+                                    } catch (Exception e) {
+                                    }
+                                    try {
+                                        des = item.get("description").toString();
+                                        try {
+                                            String dataFine = item.get("startDate").toString();
+                                            if (!data.equals(dataFine)) {
+                                                des = des + "\nDal " + data + " al " + dataFine;
+                                            }
+                                            Map<String, Object> location = (Map<String, Object>) item.get("location");
+                                            des = des + "\nLocation:" + location.get("name");
+                                            Map<String, Object> address = (Map<String, Object>) location.get("address");
+                                            des = des + "\nAddress:" + address.get("streetAddress") + " " + address.get("addressLocality");
+                                        } catch (Exception e) {
+                                        }
+
+                                    } catch (Exception e) {
+                                    }
+
+                                    LocalDateTime ld;
+                                    try {
+                                        ld = LocalDate.parse(data, formatter).atStartOfDay();
+                                    } catch (Exception e) {
+                                        ld = LocalDateTime.now();
+                                    }
+
+
+                                    Show show = new Show(data, titolo, img, href, des, fonte, from, ld);
+                                    listShow.add(show);
+                                } catch (Exception e) {
+                                }
+                            }
+                            page++;
                         }
 
-
-
-//                        int index = html.indexOf("<link rel=\"next\" href=\"?page=");
-
                     } catch (Exception e) {
-                        throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
+                        logger.error("Errore chiamando: " + from + "\n" + e.getMessage(), e);
                     }
 //                    page++;
                 } while (page != null);
@@ -281,7 +331,7 @@ public class JobConfig {
                         }
 
                         try {
-                            href = element.get("link_webshop")==null?"":element.get("link_webshop").toString();
+                            href = element.get("link_webshop") == null ? "" : element.get("link_webshop").toString();
                         } catch (Exception e) {
                             logger.error("Eccezione in: " + id + " link ");
                         }
