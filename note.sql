@@ -31,3 +31,4 @@ CREATE TABLE logga (
 
 
 --ALTER TABLE show ALTER COLUMN img TYPE VARCHAR(1000);
+--SELECT convert_from(lo_get(log::oid), 'UTF8') AS log_text FROM logga WHERE id = 1
