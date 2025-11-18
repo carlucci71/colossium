@@ -36,6 +36,18 @@ public class Show {
 		this.href = href;
 		this.from = from;
         this.localData=localData;
+        if (des.length()>4000){
+            throw new RuntimeException("Descrizione troppo lunga: " + des.length());
+        }
+        if (href.length()>1000){
+            throw new RuntimeException("HREF troppo lunga: " + href.length());
+        }
+        if (img.length()>1000){
+            throw new RuntimeException("IMG troppo lunga: " + img.length());
+        }
+        if (titolo.length()>255){
+            throw new RuntimeException("Titolo troppo lungo: " + titolo.length());
+        }
 	}
 
     public LocalDateTime getLocalData() {
