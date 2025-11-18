@@ -2,11 +2,9 @@ package it.daniele.colossium.batch;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import it.daniele.colossium.domain.Logga;
 import it.daniele.colossium.domain.News;
 import it.daniele.colossium.domain.Show;
 import it.daniele.colossium.domain.TelegramMsg;
-import it.daniele.colossium.repository.LoggaRepository;
 import it.daniele.colossium.telegrambot.TelegramBot;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -31,12 +29,12 @@ import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
 import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.ObjectUtils;
 import org.springframework.web.client.RestTemplate;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.DeleteMessage;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
@@ -44,20 +42,16 @@ import secrets.ConstantColossium;
 
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
-import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 
 @SuppressWarnings("deprecation")
@@ -65,6 +59,7 @@ import java.util.regex.Pattern;
 @EnableBatchProcessing
 public class JobConfig {
     public static final String TIPO_ELABORAZIONE = "tipoElaborazione";
+    public static final String STOP_TELEGRAM = "STOP_TELEGRAM";
     public static final String CON_RECAP = "conRecap";
     RestTemplate restTemplate = new RestTemplate();
     Logger logger = LoggerFactory.getLogger(this.getClass());
@@ -75,11 +70,12 @@ public class JobConfig {
     @Autowired
     TelegramBot telegramBot;
 
-    @Autowired
-    LoggaRepository loggaRepository;
 
     @Autowired
     StepBuilderFactory stepBuilderFactory;
+
+    @Autowired
+    Util util;
 
     @Autowired
     JobBuilderFactory jobBuilderFactory;
@@ -87,6 +83,9 @@ public class JobConfig {
 
     //@Bean
     public Job createJob() {
+        if (!ObjectUtils.isEmpty(System.getenv().get(STOP_TELEGRAM))) {
+            telegramBot.stopBot();
+        }
         return jobBuilderFactory.get("MyJob")
                 .incrementer(new RunIdIncrementer())
                 .listener(jobResultListener())
@@ -137,7 +136,7 @@ public class JobConfig {
                     logger.info("COMPLETED: {}", jobExecution);
                 } else if (jobExecution.getStatus() == BatchStatus.FAILED) {
                     telegramBot.inviaMessaggio("ERRORE" + jobExecution.getAllFailureExceptions());
-                    loggaEccezione(jobExecution.getFailureExceptions());
+                    util.loggaEccezione(jobExecution.getFailureExceptions());
                     logger.info("FAILED: {}", jobExecution);
                 } else if (skipped.size() > 0) {
                     telegramBot.inviaMessaggio("SKIPPED" + skipped);
@@ -267,7 +266,7 @@ public class JobConfig {
                         }
 
                     } catch (Exception e) {
-                        loggaEccezione(List.of(e));
+                        util.loggaEccezione(List.of(e));
                     }
 //                    page++;
                 } while (page != null);
@@ -275,7 +274,7 @@ public class JobConfig {
             }
         } catch (RuntimeException e) {
             skipped.add(fonte);
-            loggaEccezione(List.of(e));
+            util.loggaEccezione(List.of(e));
         }
     }
 
@@ -290,7 +289,7 @@ public class JobConfig {
                     entityManager.persist(el);
                     telegramBot.execute(deleteMessage);
                 } catch (TelegramApiException e) {
-                    loggaEccezione(List.of(e));
+                    util.loggaEccezione(List.of(e));
                     esito = esito + "WARNING CANCELLA NOTIFICHE\n\r";
                 }
             }
@@ -335,13 +334,13 @@ public class JobConfig {
                         try {
                             img = "https://api.teatrocolosseo.it/api/image/" + element.get("img_copertina").toString() + "?type=spettacolo";
                         } catch (Exception e) {
-                            loggaEccezione(List.of(new Exception("Eccezione in: " + id + " image ")));
+                            util.loggaEccezione(List.of(new Exception("Eccezione in: " + id + " image ")));
                         }
 
                         try {
                             href = element.get("link_webshop") == null ? "" : element.get("link_webshop").toString();
                         } catch (Exception e) {
-                            loggaEccezione(List.of(new Exception("Eccezione in: " + id + " link ")));
+                            util.loggaEccezione(List.of(new Exception("Eccezione in: " + id + " link ")));
                         }
 
                         try {
@@ -367,7 +366,7 @@ public class JobConfig {
             }
         } catch (RuntimeException e) {
             skipped.add(fonte);
-            loggaEccezione(List.of(e));
+            util.loggaEccezione(List.of(e));
         }
     }
 
@@ -436,7 +435,7 @@ public class JobConfig {
             }
         } catch (RuntimeException e) {
             skipped.add(fonte);
-            loggaEccezione(List.of(e));
+            util.loggaEccezione(List.of(e));
         }
     }
 
@@ -461,7 +460,7 @@ public class JobConfig {
             }
         } catch (RuntimeException e) {
             skipped.add(fonte);
-            loggaEccezione(List.of(e));
+            util.loggaEccezione(List.of(e));
         }
     }
 
@@ -537,7 +536,7 @@ public class JobConfig {
             }
         } catch (RuntimeException e) {
             skipped.add(fonte);
-            loggaEccezione(List.of(e));
+            util.loggaEccezione(List.of(e));
         }
     }
 
@@ -602,7 +601,7 @@ public class JobConfig {
             }
         } catch (RuntimeException e) {
             skipped.add(fonte);
-            loggaEccezione(List.of(e));
+            util.loggaEccezione(List.of(e));
         }
     }
 
@@ -666,7 +665,7 @@ public class JobConfig {
             }
         } catch (RuntimeException e) {
             skipped.add(fonte);
-            loggaEccezione(List.of(e));
+            util.loggaEccezione(List.of(e));
         }
     }
 
@@ -746,7 +745,7 @@ public class JobConfig {
             }
         } catch (RuntimeException e) {
             skipped.add(fonte);
-            loggaEccezione(List.of(e));
+            util.loggaEccezione(List.of(e));
         }
     }
 
@@ -818,7 +817,7 @@ public class JobConfig {
             }
         } catch (RuntimeException e) {
             skipped.add(fonte);
-            loggaEccezione(List.of(e));
+            util.loggaEccezione(List.of(e));
         }
     }
 
@@ -922,17 +921,6 @@ public class JobConfig {
                 });
     }
 
-    private void loggaEccezione(List<Throwable> e) {
-        try {
-            for (Throwable throwable : e) {
-                logger.error(throwable.getMessage(), e);
-                Logga logga = new Logga();
-                logga.setData(new Timestamp(new Date().getTime()));
-                logga.setLog(throwable.getMessage());
-                loggaRepository.save(logga);
-            }
-        } catch (Exception ex){}
-    }
 
 
 

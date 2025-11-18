@@ -3,13 +3,16 @@ package it.daniele.colossium.domain;
 
 import javax.persistence.Column;
 import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
 import javax.persistence.Id;
 import javax.persistence.Lob;
 import java.sql.Timestamp;
 
+import static javax.persistence.GenerationType.IDENTITY;
+
 @Entity
 public class Logga {
-    @Id
+    @Id @GeneratedValue(strategy=IDENTITY)
     private Integer id;
 	private Timestamp data;
 	@Lob

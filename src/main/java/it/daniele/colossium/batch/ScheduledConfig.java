@@ -10,6 +10,7 @@ import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.util.ObjectUtils;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -46,9 +47,20 @@ public class ScheduledConfig {
 
     public void runBatchJob(String conRecap) {
         try {
+
+            JobConfig.TIPI_ELAB tipiElab;
+
+            String tipoElaborazione = System.getenv().get("tipoElaborazione");
+            if (!ObjectUtils.isEmpty(tipoElaborazione)){
+                tipiElab=JobConfig.TIPI_ELAB.valueOf(tipoElaborazione);
+            } else {
+                tipiElab=JobConfig.TIPI_ELAB.ALL;
+            }
+
+
             JobParameters jobParameters = new JobParametersBuilder()
                     .addLong("time", System.currentTimeMillis())
-                    .addString(TIPO_ELABORAZIONE, JobConfig.TIPI_ELAB.ALL.name())
+                    .addString(TIPO_ELABORAZIONE, tipiElab.name())
                     .addString(CON_RECAP, conRecap)
                     .toJobParameters();
 
