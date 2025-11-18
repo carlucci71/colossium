@@ -2,9 +2,11 @@ package it.daniele.colossium.batch;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import it.daniele.colossium.domain.Logga;
 import it.daniele.colossium.domain.News;
 import it.daniele.colossium.domain.Show;
 import it.daniele.colossium.domain.TelegramMsg;
+import it.daniele.colossium.repository.LoggaRepository;
 import it.daniele.colossium.telegrambot.TelegramBot;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -42,12 +44,14 @@ import secrets.ConstantColossium;
 
 import javax.persistence.EntityManager;
 import javax.persistence.PersistenceContext;
+import java.sql.Timestamp;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -70,6 +74,9 @@ public class JobConfig {
 
     @Autowired
     TelegramBot telegramBot;
+
+    @Autowired
+    LoggaRepository loggaRepository;
 
     @Autowired
     StepBuilderFactory stepBuilderFactory;
@@ -130,6 +137,7 @@ public class JobConfig {
                     logger.info("COMPLETED: {}", jobExecution);
                 } else if (jobExecution.getStatus() == BatchStatus.FAILED) {
                     telegramBot.inviaMessaggio("ERRORE" + jobExecution.getAllFailureExceptions());
+                    loggaEccezione(jobExecution.getFailureExceptions());
                     logger.info("FAILED: {}", jobExecution);
                 } else if (skipped.size() > 0) {
                     telegramBot.inviaMessaggio("SKIPPED" + skipped);
@@ -259,15 +267,15 @@ public class JobConfig {
                         }
 
                     } catch (Exception e) {
-                        logger.error("Errore chiamando: " + from + "\n" + e.getMessage(), e);
+                        loggaEccezione(List.of(e));
                     }
 //                    page++;
                 } while (page != null);
                 totShows.put(fonte, listShow.size() - showIniziali);
             }
         } catch (RuntimeException e) {
-            logger.error(e.getMessage(), e);
             skipped.add(fonte);
+            loggaEccezione(List.of(e));
         }
     }
 
@@ -282,7 +290,7 @@ public class JobConfig {
                     entityManager.persist(el);
                     telegramBot.execute(deleteMessage);
                 } catch (TelegramApiException e) {
-                    logger.error(e.getMessage(), e);
+                    loggaEccezione(List.of(e));
                     esito = esito + "WARNING CANCELLA NOTIFICHE\n\r";
                 }
             }
@@ -327,13 +335,13 @@ public class JobConfig {
                         try {
                             img = "https://api.teatrocolosseo.it/api/image/" + element.get("img_copertina").toString() + "?type=spettacolo";
                         } catch (Exception e) {
-                            logger.error("Eccezione in: " + id + " image ");
+                            loggaEccezione(List.of(new Exception("Eccezione in: " + id + " image ")));
                         }
 
                         try {
                             href = element.get("link_webshop") == null ? "" : element.get("link_webshop").toString();
                         } catch (Exception e) {
-                            logger.error("Eccezione in: " + id + " link ");
+                            loggaEccezione(List.of(new Exception("Eccezione in: " + id + " link ")));
                         }
 
                         try {
@@ -358,8 +366,8 @@ public class JobConfig {
                 totShows.put(fonte, listShow.size() - showIniziali);
             }
         } catch (RuntimeException e) {
-            logger.error(e.getMessage(), e);
             skipped.add(fonte);
+            loggaEccezione(List.of(e));
         }
     }
 
@@ -427,8 +435,8 @@ public class JobConfig {
                 totShows.put(fonte, listShow.size() - showIniziali);
             }
         } catch (RuntimeException e) {
-            logger.error(e.getMessage(), e);
             skipped.add(fonte);
+            loggaEccezione(List.of(e));
         }
     }
 
@@ -452,8 +460,8 @@ public class JobConfig {
                 }
             }
         } catch (RuntimeException e) {
-            logger.error(e.getMessage(), e);
             skipped.add(fonte);
+            loggaEccezione(List.of(e));
         }
     }
 
@@ -528,8 +536,8 @@ public class JobConfig {
                 totShows.put(fonte, listShow.size() - showIniziali);
             }
         } catch (RuntimeException e) {
-            logger.error(e.getMessage(), e);
             skipped.add(fonte);
+            loggaEccezione(List.of(e));
         }
     }
 
@@ -593,8 +601,8 @@ public class JobConfig {
                 totShows.put(fonte, listShow.size() - showIniziali);
             }
         } catch (RuntimeException e) {
-            logger.error(e.getMessage(), e);
             skipped.add(fonte);
+            loggaEccezione(List.of(e));
         }
     }
 
@@ -657,8 +665,8 @@ public class JobConfig {
                 totShows.put(fonte, listShow.size() - showIniziali);
             }
         } catch (RuntimeException e) {
-            logger.error(e.getMessage(), e);
             skipped.add(fonte);
+            loggaEccezione(List.of(e));
         }
     }
 
@@ -737,8 +745,8 @@ public class JobConfig {
                 totShows.put(fonte, listShow.size() - showIniziali);
             }
         } catch (RuntimeException e) {
-            logger.error(e.getMessage(), e);
             skipped.add(fonte);
+            loggaEccezione(List.of(e));
         }
     }
 
@@ -809,8 +817,8 @@ public class JobConfig {
                 totShows.put(fonte, listShow.size() - showIniziali);
             }
         } catch (RuntimeException e) {
-            logger.error(e.getMessage(), e);
             skipped.add(fonte);
+            loggaEccezione(List.of(e));
         }
     }
 
@@ -913,6 +921,19 @@ public class JobConfig {
                     }
                 });
     }
+
+    private void loggaEccezione(List<Throwable> e) {
+        try {
+            for (Throwable throwable : e) {
+                logger.error(throwable.getMessage(), e);
+                Logga logga = new Logga();
+                logga.setData(new Timestamp(new Date().getTime()));
+                logga.setLog(throwable.getMessage());
+                loggaRepository.save(logga);
+            }
+        } catch (Exception ex){}
+    }
+
 
 
     private Map<String, Integer> totShows;
