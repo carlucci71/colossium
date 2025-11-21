@@ -204,10 +204,12 @@ public class JobConfig {
                         List<Map<String, Object>> l = (List<Map<String, Object>>) map.get("jsonld");
                         Map<String, Object> map2 = l.get(0);
                         List<Map<String, Object>> listaElem = (List<Map<String, Object>>) map2.get("itemListElement");
+                        String TBD = "TBD";
                         if (listaElem == null) {
                             page = null;
                         } else {
                             for (int i = 0; i < listaElem.size(); i++) {
+                                String addressRegion=TBD;
                                 Map<String, Object> item = (Map<String, Object>) listaElem.get(i).get("item");
                                 try {
                                     String data = "";
@@ -243,6 +245,9 @@ public class JobConfig {
                                             des = des + "\nLocation:" + location.get("name");
                                             Map<String, Object> address = (Map<String, Object>) location.get("address");
                                             des = des + "\nAddress:" + address.get("streetAddress") + " " + address.get("addressLocality");
+                                            if (address.get("addressRegion") != null) {
+                                                addressRegion = address.get("addressRegion").toString();
+                                            }
                                         } catch (Exception e) {
                                         }
 
@@ -256,9 +261,10 @@ public class JobConfig {
                                         ld = LocalDateTime.now();
                                     }
 
-
-                                    Show show = new Show(data, titolo, img, href, des, fonte, from, ld);
-                                    listShow.add(show);
+                                    if (addressRegion.equalsIgnoreCase(TBD) || addressRegion.equalsIgnoreCase("PIEMONTE") ) {
+                                        Show show = new Show(data, titolo, img, href, des, fonte, from, ld);
+                                        listShow.add(show);
+                                    }
                                 } catch (Exception e) {
                                 }
                             }
