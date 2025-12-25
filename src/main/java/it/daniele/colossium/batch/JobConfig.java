@@ -52,6 +52,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 
 @SuppressWarnings("deprecation")
@@ -209,7 +211,7 @@ public class JobConfig {
                             page = null;
                         } else {
                             for (int i = 0; i < listaElem.size(); i++) {
-                                String addressRegion=TBD;
+                                String addressRegion = TBD;
                                 Map<String, Object> item = (Map<String, Object>) listaElem.get(i).get("item");
                                 try {
                                     String data = "";
@@ -261,7 +263,7 @@ public class JobConfig {
                                         ld = LocalDateTime.now();
                                     }
 
-                                    if (addressRegion.equalsIgnoreCase(TBD) || addressRegion.equalsIgnoreCase("PIEMONTE") ) {
+                                    if (addressRegion.equalsIgnoreCase(TBD) || addressRegion.equalsIgnoreCase("PIEMONTE")) {
                                         Show show = new Show(data, titolo, img, href, des, fonte, from, ld);
                                         listShow.add(show);
                                     }
@@ -376,14 +378,33 @@ public class JobConfig {
         }
     }
 
+    enum SottoTipiMailTicket{
+        Concerti(1),
+        Mostre(2),
+        Cinema(3),
+        Teatro(4),
+        Fiere(5),
+        Sport(6),
+        Nightlife(7),
+        Experience(8);
+
+        int id;
+        SottoTipiMailTicket(int id){
+            this.id=id;
+        }
+
+    }
+
     private void leggiMailTicket() {
         String fonte = "MAILTICKET";
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MMM/yyyy", Locale.ITALIAN);
+        List<String> places = List.of("Torino","Collegno","Venaria Reale");
+        Set<String> placesFind=new TreeSet<>();
         try {
             if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.MAIL_TICKET) {
                 int showIniziali = listShow.size();
-                for (int ev = 1; ev <= 8; ev++) {
-                    String from = "https://www.mailticket.it/esplora/" + ev;
+                for (SottoTipiMailTicket value : SottoTipiMailTicket.values()) {
+                    String from = "https://www.mailticket.it/esplora/" + value.id + "/" + value.name();
                     String response;
                     try {
                         response = restTemplate.getForObject(from, String.class);
@@ -391,52 +412,61 @@ public class JobConfig {
                         throw new RuntimeException("Errore chiamando: " + from + "\n" + e.getMessage());
                     }
                     Document doc = Jsoup.parse(response);
-                    Elements select = doc.select("li[data-place*=Torino]");
-                    for (int i = 0; i < select.size(); i++) {
-                        Element element = select.get(i);
-                        try {
-                            String data = "";
-                            String titolo = "";
-                            String img = "";
-                            String href = "";
-                            String des = "";
 
-                            try {
-                                data = element.select(".day").text() + "/" + element.select(".month").text() + "/" + element.select(".year").text();
-                            } catch (Exception e) {
-                            }
-                            try {
-                                titolo = element.select(".info").first().select("p").first().ownText();
-                            } catch (Exception e) {
-                            }
-                            try {
-                                String tmp = element.select(".evento-search-container").attr("style").replace("background-image: url(//boxfiles.mailticket.it//", "");
-                                img = "https://boxfiles.mailticket.it/" + tmp.substring(0, tmp.indexOf("?")) + "";
-                            } catch (Exception e) {
-                            }
-                            try {
-                                href = "https://www.mailticket.it/" + element.select(".info").first().select("a").first().attr("href");
-                            } catch (Exception e) {
-                            }
-                            try {
-                                des = "";
-                            } catch (Exception e) {
-                            }
-
-                            LocalDateTime ld;
-                            try {
-                                ld = LocalDate.parse(data, formatter).atStartOfDay();
-                            } catch (Exception e) {
-                                ld = LocalDateTime.now();
-                            }
+                    for (Element element : doc.select("li[data-place]")) {
+                        placesFind.add(element.attr("data-place"));
+                    }
 
 
-                            Show show = new Show(data, titolo, img, href, des, fonte, from, ld);
-                            listShow.add(show);
-                        } catch (Exception e) {
+                    for (String place : places) {
+                        Elements select = doc.select("li[data-place*=" + place + "]");
+                        for (int i = 0; i < select.size(); i++) {
+                            Element element = select.get(i);
+                            try {
+                                String data = "";
+                                String titolo = "";
+                                String img = "";
+                                String href = "";
+                                String des = "";
+
+                                try {
+                                    data = element.select(".day").text() + "/" + element.select(".month").text() + "/" + element.select(".year").text();
+                                } catch (Exception e) {
+                                }
+                                try {
+                                    titolo = element.select(".info").first().select("p").first().ownText();
+                                } catch (Exception e) {
+                                }
+                                try {
+                                    String tmp = element.select(".evento-search-container").attr("style").replace("background-image: url(//boxfiles.mailticket.it//", "");
+                                    img = "https://boxfiles.mailticket.it/" + tmp.substring(0, tmp.indexOf("?")) + "";
+                                } catch (Exception e) {
+                                }
+                                try {
+                                    href = "https://www.mailticket.it/" + element.select(".info").first().select("a").first().attr("href");
+                                } catch (Exception e) {
+                                }
+                                try {
+                                    des = "";
+                                } catch (Exception e) {
+                                }
+
+                                LocalDateTime ld;
+                                try {
+                                    ld = LocalDate.parse(data, formatter).atStartOfDay();
+                                } catch (Exception e) {
+                                    ld = LocalDateTime.now();
+                                }
+
+
+                                Show show = new Show(data, titolo, img, href, des, fonte, from, ld);
+                                listShow.add(show);
+                            } catch (Exception e) {
+                            }
                         }
                     }
                 }
+                logger.debug("Place trovate {}",placesFind);
                 totShows.put(fonte, listShow.size() - showIniziali);
             }
         } catch (RuntimeException e) {
@@ -926,8 +956,6 @@ public class JobConfig {
                     }
                 });
     }
-
-
 
 
     private Map<String, Integer> totShows;
