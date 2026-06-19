@@ -178,7 +178,7 @@ public class JobConfig {
                     leggiDice();
                     leggiTicketMaster();
                     leggiMailTicket();
-                    //leggiEventbrite();
+                    leggiEventbrite();
                     cancellaNotificheTelegramScadute();
                     return RepeatStatus.FINISHED;
                 })
@@ -277,6 +277,11 @@ public class JobConfig {
                         util.loggaEccezione(List.of(e));
                     }
 //                    page++;
+                    try {
+                        Thread.currentThread().sleep(1000);
+                    } catch (InterruptedException e) {
+                        throw new RuntimeException(e);
+                    }
                 } while (page != null);
                 totShows.put(fonte, listShow.size() - showIniziali);
             }
