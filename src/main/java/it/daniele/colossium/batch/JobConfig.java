@@ -178,7 +178,7 @@ public class JobConfig {
                     leggiDice();
                     leggiTicketMaster();
                     leggiMailTicket();
-                    leggiEventbrite();
+                    //leggiEventbrite();
                     cancellaNotificheTelegramScadute();
                     return RepeatStatus.FINISHED;
                 })
