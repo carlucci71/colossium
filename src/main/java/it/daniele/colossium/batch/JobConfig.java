@@ -175,7 +175,7 @@ public class JobConfig {
                     leggiTicketOne();
                     leggiConcordia();
                     leggiVivaTicket();
-                    leggiDice();
+                    //leggiDice();
                     leggiTicketMaster();
                     leggiMailTicket();
                     //leggiEventbrite();
