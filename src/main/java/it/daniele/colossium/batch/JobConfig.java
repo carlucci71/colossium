@@ -900,12 +900,15 @@ public class JobConfig {
                 news.forEach(el -> {
                     if (el.getDataConsegna() != null && !el.toString().trim().equals("")) {
                         try {
+                            if (el.getDes() != null && el.getDes().length()>254){
+                                el.setDes(el.getDes().substring(0,254));
+                            }
                             entityManager.persist(el);
                         telegramBot.inviaMessaggio(el.toString());
                         messaggiInviati++;
                         contaEventi++;
                         } catch (Exception e) {
-
+                            System.out.println();
                         }
                     }
                 });
@@ -948,6 +951,10 @@ public class JobConfig {
         return shows ->
                 shows.forEach(el -> {
                     if (el.getDataConsegna() != null) {
+                        if (el.getDes() != null && el.getDes().length()>254){
+                            el.setDes(el.getDes().substring(0,254));
+                        }
+
                         String fonte = el.getFonte();
                         Integer tot = totNewShows.get(fonte);
                         if (tot == null) {
