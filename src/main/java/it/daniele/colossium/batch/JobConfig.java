@@ -383,7 +383,7 @@ public class JobConfig {
         }
     }
 
-    enum SottoTipiMailTicket{
+    enum SottoTipiMailTicket {
         Concerti(1),
         Mostre(2),
         Cinema(3),
@@ -394,8 +394,9 @@ public class JobConfig {
         Experience(8);
 
         int id;
-        SottoTipiMailTicket(int id){
-            this.id=id;
+
+        SottoTipiMailTicket(int id) {
+            this.id = id;
         }
 
     }
@@ -403,8 +404,8 @@ public class JobConfig {
     private void leggiMailTicket() {
         String fonte = "MAILTICKET";
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MMM/yyyy", Locale.ITALIAN);
-        List<String> places = List.of("Torino","Collegno","Venaria Reale");
-        Set<String> placesFind=new TreeSet<>();
+        List<String> places = List.of("Torino", "Collegno", "Venaria Reale");
+        Set<String> placesFind = new TreeSet<>();
         try {
             if (tipoElaborazione == TIPI_ELAB.ALL || tipoElaborazione == TIPI_ELAB.MAIL_TICKET) {
                 int showIniziali = listShow.size();
@@ -471,7 +472,7 @@ public class JobConfig {
                         }
                     }
                 }
-                logger.debug("Place trovate {}",placesFind);
+                logger.debug("Place trovate {}", placesFind);
                 totShows.put(fonte, listShow.size() - showIniziali);
             }
         } catch (RuntimeException e) {
@@ -495,6 +496,12 @@ public class JobConfig {
                 for (Map<String, Object> notizia : response) {
                     String des = notizia.get("descrizione").toString();
                     des = des.replaceAll("<.*?>", "");
+
+                    if (des != null && des.length()>254){
+                        des = des.substring(0,254);
+                    }
+
+
                     News news = new News(notizia.get("titolo").toString(), des);
                     listNews.add(news);
                 }
@@ -900,13 +907,10 @@ public class JobConfig {
                 news.forEach(el -> {
                     if (el.getDataConsegna() != null && !el.toString().trim().equals("")) {
                         try {
-                            if (el.getDes() != null && el.getDes().length()>254){
-                                el.setDes(el.getDes().substring(0,254));
-                            }
                             entityManager.persist(el);
-                        telegramBot.inviaMessaggio(el.toString());
-                        messaggiInviati++;
-                        contaEventi++;
+                            telegramBot.inviaMessaggio(el.toString());
+                            messaggiInviati++;
+                            contaEventi++;
                         } catch (Exception e) {
                             System.out.println();
                         }
@@ -951,10 +955,6 @@ public class JobConfig {
         return shows ->
                 shows.forEach(el -> {
                     if (el.getDataConsegna() != null) {
-                        if (el.getDes() != null && el.getDes().length()>254){
-                            el.setDes(el.getDes().substring(0,254));
-                        }
-
                         String fonte = el.getFonte();
                         Integer tot = totNewShows.get(fonte);
                         if (tot == null) {

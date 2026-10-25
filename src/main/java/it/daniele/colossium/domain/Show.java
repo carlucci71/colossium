@@ -108,6 +108,10 @@ public class Show {
 		return des;
 	}
 	public void setDes(String des) {
+		if (des != null && des.length()>254){
+			des = des.substring(0,254);
+		}
+
 		this.des = des;
 	}
 	public String getFrom() {
