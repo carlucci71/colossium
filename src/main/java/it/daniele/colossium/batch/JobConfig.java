@@ -899,10 +899,14 @@ public class JobConfig {
         return news ->
                 news.forEach(el -> {
                     if (el.getDataConsegna() != null && !el.toString().trim().equals("")) {
-                        entityManager.persist(el);
+                        try {
+                            entityManager.persist(el);
                         telegramBot.inviaMessaggio(el.toString());
                         messaggiInviati++;
                         contaEventi++;
+                        } catch (Exception e) {
+
+                        }
                     }
                 });
     }
