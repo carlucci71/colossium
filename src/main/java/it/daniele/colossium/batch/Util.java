@@ -21,8 +21,9 @@ public class Util {
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void loggaEccezione(List<Throwable> e) {
-        /*
+
         try {
+            /*
             for (Throwable throwable : e) {
                 logger.error(throwable.getMessage(), e);
                 Logga logga = new Logga();
@@ -30,11 +31,11 @@ public class Util {
                 logga.setLog(throwable.getMessage());
                 loggaRepository.save(logga);
             }
+
+             */
         } catch (Exception ex) {
             logger.error(ex.getMessage(), ex);
         }
-
-         */
     }
 
 }
