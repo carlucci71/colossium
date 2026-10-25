@@ -21,6 +21,7 @@ public class Util {
 
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void loggaEccezione(List<Throwable> e) {
+        /*
         try {
             for (Throwable throwable : e) {
                 logger.error(throwable.getMessage(), e);
@@ -32,6 +33,8 @@ public class Util {
         } catch (Exception ex) {
             logger.error(ex.getMessage(), ex);
         }
+
+         */
     }
 
 }
